@@ -1,0 +1,1335 @@
+import svgPaths from "./svg-bbnexf41xm";
+import imgAvatarPhoto from "./b2de2267964b6c5dbf65aad16956215c5d286b02.png";
+import imgAvatarPhoto1 from "./a19f33b70dc9d828c54554e7742bd65b32df93a6.png";
+
+function Droplets() {
+  return (
+    <div className="relative shrink-0 size-[20px]" data-name="droplets">
+      <svg className="absolute block inset-0 size-full" fill="none" height="20" preserveAspectRatio="none" viewBox="0 0 20 20" width="20">
+        <g id="droplets">
+          <path d={svgPaths.pbfe9270} id="Vector" stroke="#0EA5E9" strokeLinecap="round" strokeWidth="2" />
+        </g>
+      </svg>
+    </div>
+  );
+}
+
+function IconContainer() {
+  return (
+    <div className="content-stretch flex flex-col items-center justify-center relative shrink-0 size-[20px]" data-name="icon-container">
+      <Droplets />
+    </div>
+  );
+}
+
+function LogoIconBg() {
+  return (
+    <div className="bg-[#e0f2fe] content-stretch flex flex-col items-center justify-center relative rounded-[8px] shrink-0 size-[36px]" data-name="logo-icon-bg">
+      <IconContainer />
+    </div>
+  );
+}
+
+function LogoText() {
+  return (
+    <div className="[word-break:break-word] content-stretch flex flex-col gap-[2px] items-start leading-[normal] relative shrink-0 whitespace-nowrap" data-name="logo-text">
+      <p className="font-['Geist:Bold',sans-serif] font-bold relative shrink-0 text-[#0f172a] text-[16px]">Espacio Maibach</p>
+      <p className="font-['Geist:Medium',sans-serif] font-medium relative shrink-0 text-[#94a3b8] text-[11px] tracking-[1px] uppercase">Piletas de Fibra</p>
+    </div>
+  );
+}
+
+function LogoRow() {
+  return (
+    <div className="content-stretch flex gap-[12px] items-center pb-[20px] pt-[24px] px-[24px] relative shrink-0 w-full" data-name="logo-row">
+      <LogoIconBg />
+      <LogoText />
+    </div>
+  );
+}
+
+function BrandSection() {
+  return (
+    <div className="content-stretch flex flex-col items-start relative shrink-0 w-full" data-name="brand-section">
+      <LogoRow />
+      <div className="h-0 relative shrink-0 w-full" data-name="brand-divider">
+        <div className="absolute inset-[-1px_0_0_0]">
+          <svg className="block size-full" fill="none" height="1" preserveAspectRatio="none" viewBox="0 0 280 1" width="280">
+            <line id="brand-divider" stroke="#E2E8F0" x2="280" y1="0.5" y2="0.5" />
+          </svg>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LayoutDashboard() {
+  return (
+    <div className="relative shrink-0 size-[20px]" data-name="layout-dashboard">
+      <svg className="absolute block inset-0 size-full" fill="none" height="20" preserveAspectRatio="none" viewBox="0 0 20 20" width="20">
+        <g id="layout-dashboard">
+          <g id="Vector">
+            <path d={svgPaths.p1fc96a00} stroke="#0EA5E9" strokeLinecap="round" strokeWidth="2" />
+            <path d={svgPaths.p33089d00} stroke="#0EA5E9" strokeLinecap="round" strokeWidth="2" />
+            <path d={svgPaths.p49cfa80} stroke="#0EA5E9" strokeLinecap="round" strokeWidth="2" />
+            <path d={svgPaths.p1cfbf300} stroke="#0EA5E9" strokeLinecap="round" strokeWidth="2" />
+          </g>
+        </g>
+      </svg>
+    </div>
+  );
+}
+
+function IconContainer1() {
+  return (
+    <div className="content-stretch flex flex-col items-center justify-center relative shrink-0 size-[20px]" data-name="icon-container">
+      <LayoutDashboard />
+    </div>
+  );
+}
+
+function NavItem() {
+  return (
+    <div className="bg-[#e0f2fe] content-stretch flex gap-[12px] items-center px-[16px] py-[10px] relative rounded-[8px] shrink-0 w-full" data-name="nav-item-0">
+      <IconContainer1 />
+      <p className="[word-break:break-word] font-['Geist:SemiBold',sans-serif] font-semibold leading-[normal] relative shrink-0 text-[#0ea5e9] text-[14px] whitespace-nowrap">Dashboard</p>
+    </div>
+  );
+}
+
+function Users() {
+  return (
+    <div className="relative shrink-0 size-[20px]" data-name="users">
+      <svg className="absolute block inset-0 size-full" fill="none" height="20" preserveAspectRatio="none" viewBox="0 0 20 20" width="20">
+        <g id="users">
+          <path d={svgPaths.p1165c980} id="Vector" stroke="#475569" strokeLinecap="round" strokeWidth="2" />
+        </g>
+      </svg>
+    </div>
+  );
+}
+
+function IconContainer2() {
+  return (
+    <div className="content-stretch flex flex-col items-center justify-center relative shrink-0 size-[20px]" data-name="icon-container">
+      <Users />
+    </div>
+  );
+}
+
+function NavItem1() {
+  return (
+    <div className="bg-[rgba(0,0,0,0)] content-stretch flex gap-[12px] items-center px-[16px] py-[10px] relative rounded-[8px] shrink-0 w-full" data-name="nav-item-1">
+      <IconContainer2 />
+      <p className="[word-break:break-word] font-['Geist:Medium',sans-serif] font-medium leading-[normal] relative shrink-0 text-[#475569] text-[14px] whitespace-nowrap">Clientes</p>
+    </div>
+  );
+}
+
+function Wallet() {
+  return (
+    <div className="relative shrink-0 size-[20px]" data-name="wallet">
+      <svg className="absolute block inset-0 size-full" fill="none" height="20" preserveAspectRatio="none" viewBox="0 0 20 20" width="20">
+        <g id="wallet">
+          <path d={svgPaths.p3ad6900} id="Vector" stroke="#475569" strokeLinecap="round" strokeWidth="2" />
+        </g>
+      </svg>
+    </div>
+  );
+}
+
+function IconContainer3() {
+  return (
+    <div className="content-stretch flex flex-col items-center justify-center relative shrink-0 size-[20px]" data-name="icon-container">
+      <Wallet />
+    </div>
+  );
+}
+
+function NavItem2() {
+  return (
+    <div className="bg-[rgba(0,0,0,0)] content-stretch flex gap-[12px] items-center px-[16px] py-[10px] relative rounded-[8px] shrink-0 w-full" data-name="nav-item-2">
+      <IconContainer3 />
+      <p className="[word-break:break-word] font-['Geist:Medium',sans-serif] font-medium leading-[normal] relative shrink-0 text-[#475569] text-[14px] whitespace-nowrap">Caja</p>
+    </div>
+  );
+}
+
+function CreditCard() {
+  return (
+    <div className="relative shrink-0 size-[20px]" data-name="credit-card">
+      <svg className="absolute block inset-0 size-full" fill="none" height="20" preserveAspectRatio="none" viewBox="0 0 20 20" width="20">
+        <g id="credit-card">
+          <path d={svgPaths.pe068800} id="Vector" stroke="#475569" strokeLinecap="round" strokeWidth="2" />
+        </g>
+      </svg>
+    </div>
+  );
+}
+
+function IconContainer4() {
+  return (
+    <div className="content-stretch flex flex-col items-center justify-center relative shrink-0 size-[20px]" data-name="icon-container">
+      <CreditCard />
+    </div>
+  );
+}
+
+function NavItem3() {
+  return (
+    <div className="bg-[rgba(0,0,0,0)] content-stretch flex gap-[12px] items-center px-[16px] py-[10px] relative rounded-[8px] shrink-0 w-full" data-name="nav-item-3">
+      <IconContainer4 />
+      <p className="[word-break:break-word] font-['Geist:Medium',sans-serif] font-medium leading-[normal] relative shrink-0 text-[#475569] text-[14px] whitespace-nowrap">Cheques</p>
+    </div>
+  );
+}
+
+function Calendar() {
+  return (
+    <div className="relative shrink-0 size-[20px]" data-name="calendar">
+      <svg className="absolute block inset-0 size-full" fill="none" height="20" preserveAspectRatio="none" viewBox="0 0 20 20" width="20">
+        <g id="calendar">
+          <path d={svgPaths.p376ce800} id="Vector" stroke="#475569" strokeLinecap="round" strokeWidth="2" />
+        </g>
+      </svg>
+    </div>
+  );
+}
+
+function IconContainer5() {
+  return (
+    <div className="content-stretch flex flex-col items-center justify-center relative shrink-0 size-[20px]" data-name="icon-container">
+      <Calendar />
+    </div>
+  );
+}
+
+function NavItem4() {
+  return (
+    <div className="bg-[rgba(0,0,0,0)] content-stretch flex gap-[12px] items-center px-[16px] py-[10px] relative rounded-[8px] shrink-0 w-full" data-name="nav-item-4">
+      <IconContainer5 />
+      <p className="[word-break:break-word] font-['Geist:Medium',sans-serif] font-medium leading-[normal] relative shrink-0 text-[#475569] text-[14px] whitespace-nowrap">Calendario</p>
+    </div>
+  );
+}
+
+function Truck() {
+  return (
+    <div className="relative shrink-0 size-[20px]" data-name="truck">
+      <svg className="absolute block inset-0 size-full" fill="none" height="20" preserveAspectRatio="none" viewBox="0 0 20 20" width="20">
+        <g id="truck">
+          <path d={svgPaths.p1ff81140} id="Vector" stroke="#475569" strokeLinecap="round" strokeWidth="2" />
+        </g>
+      </svg>
+    </div>
+  );
+}
+
+function IconContainer6() {
+  return (
+    <div className="content-stretch flex flex-col items-center justify-center relative shrink-0 size-[20px]" data-name="icon-container">
+      <Truck />
+    </div>
+  );
+}
+
+function NavItem5() {
+  return (
+    <div className="bg-[rgba(0,0,0,0)] content-stretch flex gap-[12px] items-center px-[16px] py-[10px] relative rounded-[8px] shrink-0 w-full" data-name="nav-item-5">
+      <IconContainer6 />
+      <p className="[word-break:break-word] font-['Geist:Medium',sans-serif] font-medium leading-[normal] relative shrink-0 text-[#475569] text-[14px] whitespace-nowrap">Logística</p>
+    </div>
+  );
+}
+
+function Package() {
+  return (
+    <div className="relative shrink-0 size-[20px]" data-name="package">
+      <svg className="absolute block inset-0 size-full" fill="none" height="20" preserveAspectRatio="none" viewBox="0 0 20 20" width="20">
+        <g id="package">
+          <path d={svgPaths.p19b12c00} id="Vector" stroke="#475569" strokeLinecap="round" strokeWidth="2" />
+        </g>
+      </svg>
+    </div>
+  );
+}
+
+function IconContainer7() {
+  return (
+    <div className="content-stretch flex flex-col items-center justify-center relative shrink-0 size-[20px]" data-name="icon-container">
+      <Package />
+    </div>
+  );
+}
+
+function NavItem6() {
+  return (
+    <div className="bg-[rgba(0,0,0,0)] content-stretch flex gap-[12px] items-center px-[16px] py-[10px] relative rounded-[8px] shrink-0 w-full" data-name="nav-item-6">
+      <IconContainer7 />
+      <p className="[word-break:break-word] font-['Geist:Medium',sans-serif] font-medium leading-[normal] relative shrink-0 text-[#475569] text-[14px] whitespace-nowrap">Proveedores</p>
+    </div>
+  );
+}
+
+function TrendingUp() {
+  return (
+    <div className="relative shrink-0 size-[20px]" data-name="trending-up">
+      <svg className="absolute block inset-0 size-full" fill="none" height="20" preserveAspectRatio="none" viewBox="0 0 20 20" width="20">
+        <g id="trending-up">
+          <path d={svgPaths.p29ffcc00} id="Vector" stroke="#475569" strokeLinecap="round" strokeWidth="2" />
+        </g>
+      </svg>
+    </div>
+  );
+}
+
+function IconContainer8() {
+  return (
+    <div className="content-stretch flex flex-col items-center justify-center relative shrink-0 size-[20px]" data-name="icon-container">
+      <TrendingUp />
+    </div>
+  );
+}
+
+function NavItem7() {
+  return (
+    <div className="bg-[rgba(0,0,0,0)] content-stretch flex gap-[12px] items-center px-[16px] py-[10px] relative rounded-[8px] shrink-0 w-full" data-name="nav-item-7">
+      <IconContainer8 />
+      <p className="[word-break:break-word] font-['Geist:Medium',sans-serif] font-medium leading-[normal] relative shrink-0 text-[#475569] text-[14px] whitespace-nowrap">Finanzas</p>
+    </div>
+  );
+}
+
+function Settings() {
+  return (
+    <div className="relative shrink-0 size-[20px]" data-name="settings">
+      <svg className="absolute block inset-0 size-full" fill="none" height="20" preserveAspectRatio="none" viewBox="0 0 20 20" width="20">
+        <g id="settings">
+          <path d={svgPaths.pc965540} id="Vector" stroke="#475569" strokeLinecap="round" strokeWidth="2" />
+        </g>
+      </svg>
+    </div>
+  );
+}
+
+function IconContainer9() {
+  return (
+    <div className="content-stretch flex flex-col items-center justify-center relative shrink-0 size-[20px]" data-name="icon-container">
+      <Settings />
+    </div>
+  );
+}
+
+function NavItem8() {
+  return (
+    <div className="bg-[rgba(0,0,0,0)] content-stretch flex gap-[12px] items-center px-[16px] py-[10px] relative rounded-[8px] shrink-0 w-full" data-name="nav-item-8">
+      <IconContainer9 />
+      <p className="[word-break:break-word] font-['Geist:Medium',sans-serif] font-medium leading-[normal] relative shrink-0 text-[#475569] text-[14px] whitespace-nowrap">Configuración</p>
+    </div>
+  );
+}
+
+function NavList() {
+  return (
+    <div className="content-stretch flex flex-col gap-[4px] items-start pt-[20px] px-[16px] relative shrink-0 w-full" data-name="nav-list">
+      <NavItem />
+      <NavItem1 />
+      <NavItem2 />
+      <NavItem3 />
+      <NavItem4 />
+      <NavItem5 />
+      <NavItem6 />
+      <NavItem7 />
+      <NavItem8 />
+    </div>
+  );
+}
+
+function ToggleTrack() {
+  return (
+    <div className="h-[20px] relative shrink-0 w-[38px]" data-name="toggle-track">
+      <svg className="absolute block inset-0 size-full" fill="none" height="20" preserveAspectRatio="none" viewBox="0 0 38 20" width="38">
+        <g id="toggle-track">
+          <rect fill="#E0F2FE" height="20" rx="10" width="38" />
+          <circle cx="10" cy="10" fill="#0EA5E9" id="toggle-thumb" r="8" />
+        </g>
+      </svg>
+    </div>
+  );
+}
+
+function ThemeToggleRow() {
+  return (
+    <div className="content-stretch flex items-center justify-between px-[24px] py-[16px] relative shrink-0 w-full" data-name="theme-toggle-row">
+      <p className="[word-break:break-word] font-['Geist:Medium',sans-serif] font-medium leading-[normal] relative shrink-0 text-[#475569] text-[13px] whitespace-nowrap">Modo Claro</p>
+      <ToggleTrack />
+    </div>
+  );
+}
+
+function UserInfo() {
+  return (
+    <div className="[word-break:break-word] content-stretch flex flex-[1_0_0] flex-col gap-[2px] items-start leading-[normal] min-w-px relative" data-name="user-info">
+      <p className="font-['Geist:SemiBold',sans-serif] font-semibold overflow-hidden relative shrink-0 text-[#0f172a] text-[14px] text-ellipsis w-full whitespace-nowrap">Martín Maibach</p>
+      <p className="font-['Geist:Regular',sans-serif] font-normal relative shrink-0 text-[#94a3b8] text-[12px] w-full">Administrador</p>
+    </div>
+  );
+}
+
+function UserProfileCard() {
+  return (
+    <div className="bg-[#f8fafc] content-stretch flex gap-[12px] items-center p-[20px] relative shrink-0 w-full" data-name="user-profile-card">
+      <div className="relative shrink-0 size-[40px]" data-name="avatar-photo">
+        <img alt="" className="absolute block inset-0 max-w-none size-full" height="40" src={imgAvatarPhoto} width="40" />
+      </div>
+      <UserInfo />
+    </div>
+  );
+}
+
+function SidebarBottom() {
+  return (
+    <div className="content-stretch flex flex-col items-start relative shrink-0 w-full" data-name="sidebar-bottom">
+      <div className="h-0 relative shrink-0 w-full" data-name="bottom-divider">
+        <div className="absolute inset-[-1px_0_0_0]">
+          <svg className="block size-full" fill="none" height="1" preserveAspectRatio="none" viewBox="0 0 280 1" width="280">
+            <line id="brand-divider" stroke="#E2E8F0" x2="280" y1="0.5" y2="0.5" />
+          </svg>
+        </div>
+      </div>
+      <ThemeToggleRow />
+      <UserProfileCard />
+    </div>
+  );
+}
+
+function Sidebar() {
+  return (
+    <div className="bg-white content-stretch flex flex-col items-start justify-between relative self-stretch shrink-0 w-[280px]" data-name="sidebar">
+      <div aria-hidden className="absolute border-[#e2e8f0] border-r border-solid inset-0 pointer-events-none" />
+      <BrandSection />
+      <NavList />
+      <SidebarBottom />
+    </div>
+  );
+}
+
+function Crumb() {
+  return (
+    <div className="[word-break:break-word] content-stretch flex font-['Geist:Regular',sans-serif] font-normal gap-[8px] items-center leading-[normal] relative shrink-0 text-[#94a3b8] text-[14px] whitespace-nowrap" data-name="crumb-0">
+      <p className="relative shrink-0">Inicio</p>
+      <p className="relative shrink-0">/</p>
+    </div>
+  );
+}
+
+function Crumb1() {
+  return (
+    <div className="content-stretch flex items-center relative shrink-0" data-name="crumb-1">
+      <p className="[word-break:break-word] font-['Geist:SemiBold',sans-serif] font-semibold leading-[normal] relative shrink-0 text-[#0f172a] text-[14px] whitespace-nowrap">Dashboard</p>
+    </div>
+  );
+}
+
+function Breadcrumbs() {
+  return (
+    <div className="content-stretch flex gap-[8px] items-center relative shrink-0" data-name="breadcrumbs">
+      <Crumb />
+      <Crumb1 />
+    </div>
+  );
+}
+
+function Search() {
+  return (
+    <div className="relative shrink-0 size-[16px]" data-name="search">
+      <svg className="absolute block inset-0 size-full" fill="none" height="16" preserveAspectRatio="none" viewBox="0 0 16 16" width="16">
+        <g id="search">
+          <path d={svgPaths.p3f6e0f00} id="Vector" stroke="#94A3B8" strokeLinecap="round" strokeWidth="2" />
+        </g>
+      </svg>
+    </div>
+  );
+}
+
+function IconContainer10() {
+  return (
+    <div className="content-stretch flex flex-col items-center justify-center relative shrink-0 size-[16px]" data-name="icon-container">
+      <Search />
+    </div>
+  );
+}
+
+function SearchBox() {
+  return (
+    <div className="bg-[#f8fafc] content-stretch flex gap-[8px] items-center px-[16px] py-[8px] relative rounded-[8px] shrink-0 w-[280px]" data-name="search-box">
+      <div aria-hidden className="absolute border border-[#e2e8f0] border-solid inset-0 pointer-events-none rounded-[8px]" />
+      <IconContainer10 />
+      <p className="[word-break:break-word] flex-[1_0_0] font-['Geist:Regular',sans-serif] font-normal leading-[normal] min-w-px relative text-[#94a3b8] text-[14px]">Buscar cliente, orden, cheque...</p>
+    </div>
+  );
+}
+
+function Bell() {
+  return (
+    <div className="relative shrink-0 size-[20px]" data-name="bell">
+      <svg className="absolute block inset-0 size-full" fill="none" height="20" preserveAspectRatio="none" viewBox="0 0 20 20" width="20">
+        <g id="bell">
+          <path d={svgPaths.p21bb9400} id="Vector" stroke="#475569" strokeLinecap="round" strokeWidth="2" />
+        </g>
+      </svg>
+    </div>
+  );
+}
+
+function IconContainer11() {
+  return (
+    <div className="content-stretch flex flex-col items-center justify-center relative shrink-0 size-[20px]" data-name="icon-container">
+      <Bell />
+    </div>
+  );
+}
+
+function NotificationBadge() {
+  return (
+    <div className="absolute bg-[#ef4444] content-stretch flex items-center justify-center right-[2px] rounded-[8px] size-[16px] top-[2px]" data-name="notification-badge">
+      <p className="[word-break:break-word] font-['Geist:Bold',sans-serif] font-bold leading-[normal] relative shrink-0 text-[10px] text-white whitespace-nowrap">3</p>
+    </div>
+  );
+}
+
+function NotificationBell() {
+  return (
+    <div className="content-stretch flex flex-col items-center justify-center relative shrink-0 size-[32px]" data-name="notification-bell">
+      <IconContainer11 />
+      <NotificationBadge />
+    </div>
+  );
+}
+
+function HeaderRight() {
+  return (
+    <div className="content-stretch flex gap-[24px] items-center relative shrink-0" data-name="header-right">
+      <SearchBox />
+      <NotificationBell />
+      <div className="relative shrink-0 size-[32px]" data-name="avatar-photo">
+        <img alt="" className="absolute block inset-0 max-w-none size-full" height="32" src={imgAvatarPhoto1} width="32" />
+      </div>
+    </div>
+  );
+}
+
+function Header() {
+  return (
+    <div className="bg-white content-stretch flex h-[72px] items-center justify-between px-[32px] py-[16px] relative shrink-0 w-full" data-name="header">
+      <div aria-hidden className="absolute border-[#e2e8f0] border-b border-solid inset-0 pointer-events-none" />
+      <Breadcrumbs />
+      <HeaderRight />
+    </div>
+  );
+}
+
+function Banknote() {
+  return (
+    <div className="relative shrink-0 size-[18px]" data-name="banknote">
+      <svg className="absolute block inset-0 size-full" fill="none" height="18" preserveAspectRatio="none" viewBox="0 0 18 18" width="18">
+        <g id="banknote">
+          <path d={svgPaths.p2c5d6a90} id="Vector" stroke="#0EA5E9" strokeLinecap="round" strokeWidth="2" />
+        </g>
+      </svg>
+    </div>
+  );
+}
+
+function IconContainer12() {
+  return (
+    <div className="content-stretch flex flex-col items-center justify-center relative shrink-0 size-[18px]" data-name="icon-container">
+      <Banknote />
+    </div>
+  );
+}
+
+function KpiIconBg() {
+  return (
+    <div className="bg-[#e0f2fe] content-stretch flex flex-col items-center justify-center relative rounded-[8px] shrink-0 size-[36px]" data-name="kpi-icon-bg">
+      <IconContainer12 />
+    </div>
+  );
+}
+
+function KpiTop() {
+  return (
+    <div className="content-stretch flex items-center justify-between relative shrink-0 w-full" data-name="kpi-top">
+      <p className="[word-break:break-word] font-['Geist:Medium',sans-serif] font-medium leading-[normal] relative shrink-0 text-[#475569] text-[14px] whitespace-nowrap">Ventas del Mes</p>
+      <KpiIconBg />
+    </div>
+  );
+}
+
+function ArrowUpRight() {
+  return (
+    <div className="relative shrink-0 size-[14px]" data-name="arrow-up-right">
+      <svg className="absolute block inset-0 size-full" fill="none" height="14" preserveAspectRatio="none" viewBox="0 0 14 14" width="14">
+        <g id="arrow-up-right">
+          <path d={svgPaths.p1908cf00} id="Vector" stroke="#10B981" strokeLinecap="round" strokeWidth="2" />
+        </g>
+      </svg>
+    </div>
+  );
+}
+
+function IconContainer13() {
+  return (
+    <div className="content-stretch flex flex-col items-center justify-center relative shrink-0 size-[14px]" data-name="icon-container">
+      <ArrowUpRight />
+    </div>
+  );
+}
+
+function TrendIndicator() {
+  return (
+    <div className="content-stretch flex gap-[2px] items-center relative shrink-0" data-name="trend-indicator">
+      <IconContainer13 />
+      <p className="[word-break:break-word] font-['Geist:SemiBold',sans-serif] font-semibold leading-[normal] relative shrink-0 text-[#10b981] text-[12px] whitespace-nowrap">+12.4%</p>
+    </div>
+  );
+}
+
+function KpiTrend() {
+  return (
+    <div className="content-stretch flex gap-[6px] items-center relative shrink-0" data-name="kpi-trend">
+      <TrendIndicator />
+      <p className="[word-break:break-word] font-['Geist:Regular',sans-serif] font-normal leading-[normal] relative shrink-0 text-[#94a3b8] text-[12px] whitespace-nowrap">vs mes pasado</p>
+    </div>
+  );
+}
+
+function KpiBottom() {
+  return (
+    <div className="content-stretch flex flex-col gap-[4px] items-start relative shrink-0 w-full" data-name="kpi-bottom">
+      <p className="[word-break:break-word] font-['Geist:Bold',sans-serif] font-bold leading-[normal] relative shrink-0 text-[#0f172a] text-[24px] whitespace-nowrap">$4.850.000</p>
+      <KpiTrend />
+    </div>
+  );
+}
+
+function KpiCard() {
+  return (
+    <div className="bg-white content-stretch drop-shadow-[0px_1px_1.5px_rgba(0,0,0,0.03)] flex flex-[1_0_42px] flex-col gap-[12px] items-start min-w-px p-[20px] relative rounded-[12px]" data-name="kpi-card">
+      <div aria-hidden className="absolute border border-[#e2e8f0] border-solid inset-0 pointer-events-none rounded-[12px]" />
+      <KpiTop />
+      <KpiBottom />
+    </div>
+  );
+}
+
+function Droplets1() {
+  return (
+    <div className="relative shrink-0 size-[18px]" data-name="droplets">
+      <svg className="absolute block inset-0 size-full" fill="none" height="18" preserveAspectRatio="none" viewBox="0 0 18 18" width="18">
+        <g id="droplets">
+          <path d={svgPaths.p196b6580} id="Vector" stroke="#0EA5E9" strokeLinecap="round" strokeWidth="2" />
+        </g>
+      </svg>
+    </div>
+  );
+}
+
+function IconContainer14() {
+  return (
+    <div className="content-stretch flex flex-col items-center justify-center relative shrink-0 size-[18px]" data-name="icon-container">
+      <Droplets1 />
+    </div>
+  );
+}
+
+function KpiIconBg1() {
+  return (
+    <div className="bg-[#e0f2fe] content-stretch flex flex-col items-center justify-center relative rounded-[8px] shrink-0 size-[36px]" data-name="kpi-icon-bg">
+      <IconContainer14 />
+    </div>
+  );
+}
+
+function KpiTop1() {
+  return (
+    <div className="content-stretch flex items-center justify-between relative shrink-0 w-full" data-name="kpi-top">
+      <p className="[word-break:break-word] font-['Geist:Medium',sans-serif] font-medium leading-[normal] relative shrink-0 text-[#475569] text-[14px] whitespace-nowrap">Pedidos Activos</p>
+      <KpiIconBg1 />
+    </div>
+  );
+}
+
+function ArrowUpRight1() {
+  return (
+    <div className="relative shrink-0 size-[14px]" data-name="arrow-up-right">
+      <svg className="absolute block inset-0 size-full" fill="none" height="14" preserveAspectRatio="none" viewBox="0 0 14 14" width="14">
+        <g id="arrow-up-right">
+          <path d={svgPaths.p1908cf00} id="Vector" stroke="#10B981" strokeLinecap="round" strokeWidth="2" />
+        </g>
+      </svg>
+    </div>
+  );
+}
+
+function IconContainer15() {
+  return (
+    <div className="content-stretch flex flex-col items-center justify-center relative shrink-0 size-[14px]" data-name="icon-container">
+      <ArrowUpRight1 />
+    </div>
+  );
+}
+
+function TrendIndicator1() {
+  return (
+    <div className="content-stretch flex gap-[2px] items-center relative shrink-0" data-name="trend-indicator">
+      <IconContainer15 />
+      <p className="[word-break:break-word] font-['Geist:SemiBold',sans-serif] font-semibold leading-[normal] relative shrink-0 text-[#10b981] text-[12px] whitespace-nowrap">+2</p>
+    </div>
+  );
+}
+
+function KpiTrend1() {
+  return (
+    <div className="content-stretch flex gap-[6px] items-center relative shrink-0" data-name="kpi-trend">
+      <TrendIndicator1 />
+      <p className="[word-break:break-word] font-['Geist:Regular',sans-serif] font-normal leading-[normal] relative shrink-0 text-[#94a3b8] text-[12px] whitespace-nowrap">instalaciones activas</p>
+    </div>
+  );
+}
+
+function KpiBottom1() {
+  return (
+    <div className="content-stretch flex flex-col gap-[4px] items-start relative shrink-0 w-full" data-name="kpi-bottom">
+      <p className="[word-break:break-word] font-['Geist:Bold',sans-serif] font-bold leading-[normal] relative shrink-0 text-[#0f172a] text-[24px] whitespace-nowrap">12</p>
+      <KpiTrend1 />
+    </div>
+  );
+}
+
+function KpiCard1() {
+  return (
+    <div className="bg-white content-stretch drop-shadow-[0px_1px_1.5px_rgba(0,0,0,0.03)] flex flex-[1_0_42px] flex-col gap-[12px] items-start min-w-px p-[20px] relative rounded-[12px]" data-name="kpi-card">
+      <div aria-hidden className="absolute border border-[#e2e8f0] border-solid inset-0 pointer-events-none rounded-[12px]" />
+      <KpiTop1 />
+      <KpiBottom1 />
+    </div>
+  );
+}
+
+function AlertTriangle() {
+  return (
+    <div className="relative shrink-0 size-[18px]" data-name="alert-triangle">
+      <svg className="absolute block inset-0 size-full" fill="none" height="18" preserveAspectRatio="none" viewBox="0 0 18 18" width="18">
+        <g id="alert-triangle">
+          <path d={svgPaths.p174ecec0} id="Vector" stroke="#F59E0B" strokeLinecap="round" strokeWidth="2" />
+        </g>
+      </svg>
+    </div>
+  );
+}
+
+function IconContainer16() {
+  return (
+    <div className="content-stretch flex flex-col items-center justify-center relative shrink-0 size-[18px]" data-name="icon-container">
+      <AlertTriangle />
+    </div>
+  );
+}
+
+function KpiIconBg2() {
+  return (
+    <div className="bg-[#fef3c7] content-stretch flex flex-col items-center justify-center relative rounded-[8px] shrink-0 size-[36px]" data-name="kpi-icon-bg">
+      <IconContainer16 />
+    </div>
+  );
+}
+
+function KpiTop2() {
+  return (
+    <div className="content-stretch flex items-center justify-between relative shrink-0 w-full" data-name="kpi-top">
+      <p className="[word-break:break-word] font-['Geist:Medium',sans-serif] font-medium leading-[normal] relative shrink-0 text-[#475569] text-[14px] whitespace-nowrap">Clientes Morosos</p>
+      <KpiIconBg2 />
+    </div>
+  );
+}
+
+function ArrowDownLeft() {
+  return (
+    <div className="relative shrink-0 size-[14px]" data-name="arrow-down-left">
+      <svg className="absolute block inset-0 size-full" fill="none" height="14" preserveAspectRatio="none" viewBox="0 0 14 14" width="14">
+        <g id="arrow-down-left">
+          <path d={svgPaths.p3c1ee100} id="Vector" stroke="#F59E0B" strokeLinecap="round" strokeWidth="2" />
+        </g>
+      </svg>
+    </div>
+  );
+}
+
+function IconContainer17() {
+  return (
+    <div className="content-stretch flex flex-col items-center justify-center relative shrink-0 size-[14px]" data-name="icon-container">
+      <ArrowDownLeft />
+    </div>
+  );
+}
+
+function TrendIndicator2() {
+  return (
+    <div className="content-stretch flex gap-[2px] items-center relative shrink-0" data-name="trend-indicator">
+      <IconContainer17 />
+      <p className="[word-break:break-word] font-['Geist:SemiBold',sans-serif] font-semibold leading-[normal] relative shrink-0 text-[#f59e0b] text-[12px] whitespace-nowrap">Atención</p>
+    </div>
+  );
+}
+
+function KpiTrend2() {
+  return (
+    <div className="content-stretch flex gap-[6px] items-center relative shrink-0" data-name="kpi-trend">
+      <TrendIndicator2 />
+      <p className="[word-break:break-word] font-['Geist:Regular',sans-serif] font-normal leading-[normal] relative shrink-0 text-[#94a3b8] text-[12px] whitespace-nowrap">requiere atención</p>
+    </div>
+  );
+}
+
+function KpiBottom2() {
+  return (
+    <div className="content-stretch flex flex-col gap-[4px] items-start relative shrink-0 w-full" data-name="kpi-bottom">
+      <p className="[word-break:break-word] font-['Geist:Bold',sans-serif] font-bold leading-[normal] relative shrink-0 text-[#0f172a] text-[24px] whitespace-nowrap">3 Clientes</p>
+      <KpiTrend2 />
+    </div>
+  );
+}
+
+function KpiCard2() {
+  return (
+    <div className="bg-white content-stretch drop-shadow-[0px_1px_1.5px_rgba(0,0,0,0.03)] flex flex-[1_0_42px] flex-col gap-[12px] items-start min-w-px p-[20px] relative rounded-[12px]" data-name="kpi-card">
+      <div aria-hidden className="absolute border border-[#f59e0b] border-solid inset-0 pointer-events-none rounded-[12px]" />
+      <KpiTop2 />
+      <KpiBottom2 />
+    </div>
+  );
+}
+
+function Wallet1() {
+  return (
+    <div className="relative shrink-0 size-[18px]" data-name="wallet">
+      <svg className="absolute block inset-0 size-full" fill="none" height="18" preserveAspectRatio="none" viewBox="0 0 18 18" width="18">
+        <g id="wallet">
+          <path d={svgPaths.p378b48c0} id="Vector" stroke="#0EA5E9" strokeLinecap="round" strokeWidth="2" />
+        </g>
+      </svg>
+    </div>
+  );
+}
+
+function IconContainer18() {
+  return (
+    <div className="content-stretch flex flex-col items-center justify-center relative shrink-0 size-[18px]" data-name="icon-container">
+      <Wallet1 />
+    </div>
+  );
+}
+
+function KpiIconBg3() {
+  return (
+    <div className="bg-[#e0f2fe] content-stretch flex flex-col items-center justify-center relative rounded-[8px] shrink-0 size-[36px]" data-name="kpi-icon-bg">
+      <IconContainer18 />
+    </div>
+  );
+}
+
+function KpiTop3() {
+  return (
+    <div className="content-stretch flex items-center justify-between relative shrink-0 w-full" data-name="kpi-top">
+      <p className="[word-break:break-word] font-['Geist:Medium',sans-serif] font-medium leading-[normal] relative shrink-0 text-[#475569] text-[14px] whitespace-nowrap">Caja Disponible</p>
+      <KpiIconBg3 />
+    </div>
+  );
+}
+
+function ArrowUpRight2() {
+  return (
+    <div className="relative shrink-0 size-[14px]" data-name="arrow-up-right">
+      <svg className="absolute block inset-0 size-full" fill="none" height="14" preserveAspectRatio="none" viewBox="0 0 14 14" width="14">
+        <g id="arrow-up-right">
+          <path d={svgPaths.p1908cf00} id="Vector" stroke="#10B981" strokeLinecap="round" strokeWidth="2" />
+        </g>
+      </svg>
+    </div>
+  );
+}
+
+function IconContainer19() {
+  return (
+    <div className="content-stretch flex flex-col items-center justify-center relative shrink-0 size-[14px]" data-name="icon-container">
+      <ArrowUpRight2 />
+    </div>
+  );
+}
+
+function TrendIndicator3() {
+  return (
+    <div className="content-stretch flex gap-[2px] items-center relative shrink-0" data-name="trend-indicator">
+      <IconContainer19 />
+      <p className="[word-break:break-word] font-['Geist:SemiBold',sans-serif] font-semibold leading-[normal] relative shrink-0 text-[#10b981] text-[12px] whitespace-nowrap">+8.2%</p>
+    </div>
+  );
+}
+
+function KpiTrend3() {
+  return (
+    <div className="content-stretch flex gap-[6px] items-center relative shrink-0" data-name="kpi-trend">
+      <TrendIndicator3 />
+      <p className="[word-break:break-word] font-['Geist:Regular',sans-serif] font-normal leading-[normal] relative shrink-0 text-[#94a3b8] text-[12px] whitespace-nowrap">en cuentas</p>
+    </div>
+  );
+}
+
+function KpiBottom3() {
+  return (
+    <div className="content-stretch flex flex-col gap-[4px] items-start relative shrink-0 w-full" data-name="kpi-bottom">
+      <p className="[word-break:break-word] font-['Geist:Bold',sans-serif] font-bold leading-[normal] relative shrink-0 text-[#0f172a] text-[24px] whitespace-nowrap">$1.230.500</p>
+      <KpiTrend3 />
+    </div>
+  );
+}
+
+function KpiCard3() {
+  return (
+    <div className="bg-white content-stretch drop-shadow-[0px_1px_1.5px_rgba(0,0,0,0.03)] flex flex-[1_0_42px] flex-col gap-[12px] items-start min-w-px p-[20px] relative rounded-[12px]" data-name="kpi-card">
+      <div aria-hidden className="absolute border border-[#e2e8f0] border-solid inset-0 pointer-events-none rounded-[12px]" />
+      <KpiTop3 />
+      <KpiBottom3 />
+    </div>
+  );
+}
+
+function KpiRow() {
+  return (
+    <div className="content-stretch flex gap-[16px] items-start relative shrink-0 w-full" data-name="kpi-row">
+      <KpiCard />
+      <KpiCard1 />
+      <KpiCard2 />
+      <KpiCard3 />
+    </div>
+  );
+}
+
+function ChartTitleGroup() {
+  return (
+    <div className="[word-break:break-word] content-stretch flex flex-col gap-[4px] items-start leading-[normal] relative shrink-0 whitespace-nowrap" data-name="chart-title-group">
+      <p className="font-['Geist:SemiBold',sans-serif] font-semibold relative shrink-0 text-[#0f172a] text-[16px]">Ventas Últimos 6 Meses</p>
+      <p className="font-['Geist:Regular',sans-serif] font-normal relative shrink-0 text-[#94a3b8] text-[12px]">Facturación mensual en pesos argentinos</p>
+    </div>
+  );
+}
+
+function LegendItem() {
+  return (
+    <div className="content-stretch flex gap-[6px] items-center relative shrink-0" data-name="legend-item">
+      <div className="relative shrink-0 size-[8px]" data-name="Ellipse">
+        <svg className="absolute block inset-0 size-full" fill="none" height="8" preserveAspectRatio="none" viewBox="0 0 8 8" width="8">
+          <circle cx="4" cy="4" fill="#0EA5E9" id="Ellipse" r="4" />
+        </svg>
+      </div>
+      <p className="[word-break:break-word] font-['Geist:Regular',sans-serif] font-normal leading-[normal] relative shrink-0 text-[#475569] text-[12px] whitespace-nowrap">Ventas ($)</p>
+    </div>
+  );
+}
+
+function ChartLegend() {
+  return (
+    <div className="content-stretch flex items-start relative shrink-0" data-name="chart-legend">
+      <LegendItem />
+    </div>
+  );
+}
+
+function ChartHeader() {
+  return (
+    <div className="content-stretch flex items-center justify-between relative shrink-0 w-full" data-name="chart-header">
+      <ChartTitleGroup />
+      <ChartLegend />
+    </div>
+  );
+}
+
+function BarCol() {
+  return (
+    <div className="content-stretch flex flex-[1_0_0] flex-col gap-[8px] items-center min-w-px relative" data-name="bar-col-0">
+      <p className="[word-break:break-word] font-['Geist:SemiBold',sans-serif] font-semibold leading-[normal] relative shrink-0 text-[#475569] text-[11px] whitespace-nowrap">$2.1M</p>
+      <div className="bg-[#0ea5e9] h-[80px] relative rounded-tl-[4px] rounded-tr-[4px] shrink-0 w-full" data-name="bar" />
+      <p className="[word-break:break-word] font-['Geist:Regular',sans-serif] font-normal leading-[normal] relative shrink-0 text-[#94a3b8] text-[12px] whitespace-nowrap">Mar</p>
+    </div>
+  );
+}
+
+function BarCol1() {
+  return (
+    <div className="content-stretch flex flex-[1_0_0] flex-col gap-[8px] items-center min-w-px relative" data-name="bar-col-1">
+      <p className="[word-break:break-word] font-['Geist:SemiBold',sans-serif] font-semibold leading-[normal] relative shrink-0 text-[#475569] text-[11px] whitespace-nowrap">$2.5M</p>
+      <div className="bg-[#0ea5e9] h-[100px] relative rounded-tl-[4px] rounded-tr-[4px] shrink-0 w-full" data-name="bar" />
+      <p className="[word-break:break-word] font-['Geist:Regular',sans-serif] font-normal leading-[normal] relative shrink-0 text-[#94a3b8] text-[12px] whitespace-nowrap">Abr</p>
+    </div>
+  );
+}
+
+function BarCol2() {
+  return (
+    <div className="content-stretch flex flex-[1_0_0] flex-col gap-[8px] items-center min-w-px relative" data-name="bar-col-2">
+      <p className="[word-break:break-word] font-['Geist:SemiBold',sans-serif] font-semibold leading-[normal] relative shrink-0 text-[#475569] text-[11px] whitespace-nowrap">$3.2M</p>
+      <div className="bg-[#0ea5e9] h-[120px] relative rounded-tl-[4px] rounded-tr-[4px] shrink-0 w-full" data-name="bar" />
+      <p className="[word-break:break-word] font-['Geist:Regular',sans-serif] font-normal leading-[normal] relative shrink-0 text-[#94a3b8] text-[12px] whitespace-nowrap">May</p>
+    </div>
+  );
+}
+
+function BarCol3() {
+  return (
+    <div className="content-stretch flex flex-[1_0_0] flex-col gap-[8px] items-center min-w-px relative" data-name="bar-col-3">
+      <p className="[word-break:break-word] font-['Geist:SemiBold',sans-serif] font-semibold leading-[normal] relative shrink-0 text-[#475569] text-[11px] whitespace-nowrap">$3.8M</p>
+      <div className="bg-[#0ea5e9] h-[140px] relative rounded-tl-[4px] rounded-tr-[4px] shrink-0 w-full" data-name="bar" />
+      <p className="[word-break:break-word] font-['Geist:Regular',sans-serif] font-normal leading-[normal] relative shrink-0 text-[#94a3b8] text-[12px] whitespace-nowrap">Jun</p>
+    </div>
+  );
+}
+
+function BarCol4() {
+  return (
+    <div className="content-stretch flex flex-[1_0_0] flex-col gap-[8px] items-center min-w-px relative" data-name="bar-col-4">
+      <p className="[word-break:break-word] font-['Geist:SemiBold',sans-serif] font-semibold leading-[normal] relative shrink-0 text-[#475569] text-[11px] whitespace-nowrap">$4.1M</p>
+      <div className="bg-[#0ea5e9] h-[165px] relative rounded-tl-[4px] rounded-tr-[4px] shrink-0 w-full" data-name="bar" />
+      <p className="[word-break:break-word] font-['Geist:Regular',sans-serif] font-normal leading-[normal] relative shrink-0 text-[#94a3b8] text-[12px] whitespace-nowrap">Jul</p>
+    </div>
+  );
+}
+
+function BarCol5() {
+  return (
+    <div className="content-stretch flex flex-[1_0_0] flex-col gap-[8px] items-center min-w-px relative" data-name="bar-col-5">
+      <p className="[word-break:break-word] font-['Geist:SemiBold',sans-serif] font-semibold leading-[normal] relative shrink-0 text-[#475569] text-[11px] whitespace-nowrap">$4.8M</p>
+      <div className="bg-[#0ea5e9] h-[200px] relative rounded-tl-[4px] rounded-tr-[4px] shrink-0 w-full" data-name="bar" />
+      <p className="[word-break:break-word] font-['Geist:Regular',sans-serif] font-normal leading-[normal] relative shrink-0 text-[#94a3b8] text-[12px] whitespace-nowrap">Ago</p>
+    </div>
+  );
+}
+
+function BarChartVisual() {
+  return (
+    <div className="content-stretch flex gap-[20px] h-[220px] items-end pt-[20px] relative shrink-0 w-full" data-name="bar-chart-visual">
+      <BarCol />
+      <BarCol1 />
+      <BarCol2 />
+      <BarCol3 />
+      <BarCol4 />
+      <BarCol5 />
+    </div>
+  );
+}
+
+function ChartCardContainer() {
+  return (
+    <div className="bg-white content-stretch drop-shadow-[0px_1px_1.5px_rgba(0,0,0,0.03)] flex flex-[1_0_50px] flex-col gap-[20px] items-start min-w-px p-[24px] relative rounded-[12px]" data-name="chart-card-container">
+      <div aria-hidden className="absolute border border-[#e2e8f0] border-solid inset-0 pointer-events-none rounded-[12px]" />
+      <ChartHeader />
+      <BarChartVisual />
+    </div>
+  );
+}
+
+function InstHeader() {
+  return (
+    <div className="[word-break:break-word] content-stretch flex items-center justify-between leading-[normal] relative shrink-0 w-full whitespace-nowrap" data-name="inst-header">
+      <p className="font-['Geist:SemiBold',sans-serif] font-semibold relative shrink-0 text-[#0f172a] text-[16px]">Próximas Instalaciones</p>
+      <p className="font-['Geist:Medium',sans-serif] font-medium relative shrink-0 text-[#0ea5e9] text-[13px]">Ver Agenda</p>
+    </div>
+  );
+}
+
+function InstMeta() {
+  return (
+    <div className="[word-break:break-word] content-stretch flex flex-col gap-[4px] items-start leading-[normal] relative shrink-0 whitespace-nowrap" data-name="inst-meta">
+      <p className="font-['Geist:SemiBold',sans-serif] font-semibold relative shrink-0 text-[#0f172a] text-[14px]">García, Roberto</p>
+      <p className="font-['Geist:Regular',sans-serif] font-normal relative shrink-0 text-[#475569] text-[12px]">Pileta Modelo Roma 6x3</p>
+      <p className="font-['Geist:Regular',sans-serif] font-normal relative shrink-0 text-[#94a3b8] text-[11px]">15 Ago, 2024</p>
+    </div>
+  );
+}
+
+function StatusBadge() {
+  return (
+    <div className="bg-[#d1fae5] content-stretch flex items-start px-[8px] py-[4px] relative rounded-[6px] shrink-0" data-name="status-badge">
+      <p className="[word-break:break-word] font-['Geist:SemiBold',sans-serif] font-semibold leading-[normal] relative shrink-0 text-[#10b981] text-[12px] whitespace-nowrap">Confirmada</p>
+    </div>
+  );
+}
+
+function InstRow() {
+  return (
+    <div className="bg-[#f8fafc] content-stretch flex items-center justify-between p-[16px] relative rounded-[8px] shrink-0 w-full" data-name="inst-row-0">
+      <div aria-hidden className="absolute border border-[#e2e8f0] border-solid inset-0 pointer-events-none rounded-[8px]" />
+      <InstMeta />
+      <StatusBadge />
+    </div>
+  );
+}
+
+function InstMeta1() {
+  return (
+    <div className="[word-break:break-word] content-stretch flex flex-col gap-[4px] items-start leading-[normal] relative shrink-0 whitespace-nowrap" data-name="inst-meta">
+      <p className="font-['Geist:SemiBold',sans-serif] font-semibold relative shrink-0 text-[#0f172a] text-[14px]">Albornoz, Lucía</p>
+      <p className="font-['Geist:Regular',sans-serif] font-normal relative shrink-0 text-[#475569] text-[12px]">Pileta Modelo Ibiza 7x3.5</p>
+      <p className="font-['Geist:Regular',sans-serif] font-normal relative shrink-0 text-[#94a3b8] text-[11px]">18 Ago, 2024</p>
+    </div>
+  );
+}
+
+function StatusBadge1() {
+  return (
+    <div className="bg-[#d1fae5] content-stretch flex items-start px-[8px] py-[4px] relative rounded-[6px] shrink-0" data-name="status-badge">
+      <p className="[word-break:break-word] font-['Geist:SemiBold',sans-serif] font-semibold leading-[normal] relative shrink-0 text-[#10b981] text-[12px] whitespace-nowrap">Confirmada</p>
+    </div>
+  );
+}
+
+function InstRow1() {
+  return (
+    <div className="bg-[#f8fafc] content-stretch flex items-center justify-between p-[16px] relative rounded-[8px] shrink-0 w-full" data-name="inst-row-1">
+      <div aria-hidden className="absolute border border-[#e2e8f0] border-solid inset-0 pointer-events-none rounded-[8px]" />
+      <InstMeta1 />
+      <StatusBadge1 />
+    </div>
+  );
+}
+
+function InstMeta2() {
+  return (
+    <div className="[word-break:break-word] content-stretch flex flex-col gap-[4px] items-start leading-[normal] relative shrink-0 whitespace-nowrap" data-name="inst-meta">
+      <p className="font-['Geist:SemiBold',sans-serif] font-semibold relative shrink-0 text-[#0f172a] text-[14px]">Rodriguez, Juan</p>
+      <p className="font-['Geist:Regular',sans-serif] font-normal relative shrink-0 text-[#475569] text-[12px]">Pileta Modelo Venecia 5x2.5</p>
+      <p className="font-['Geist:Regular',sans-serif] font-normal relative shrink-0 text-[#94a3b8] text-[11px]">22 Ago, 2024</p>
+    </div>
+  );
+}
+
+function StatusBadge2() {
+  return (
+    <div className="bg-[#fef3c7] content-stretch flex items-start px-[8px] py-[4px] relative rounded-[6px] shrink-0" data-name="status-badge">
+      <p className="[word-break:break-word] font-['Geist:SemiBold',sans-serif] font-semibold leading-[normal] relative shrink-0 text-[#f59e0b] text-[12px] whitespace-nowrap">Pendiente</p>
+    </div>
+  );
+}
+
+function InstRow2() {
+  return (
+    <div className="bg-[#f8fafc] content-stretch flex items-center justify-between p-[16px] relative rounded-[8px] shrink-0 w-full" data-name="inst-row-2">
+      <div aria-hidden className="absolute border border-[#e2e8f0] border-solid inset-0 pointer-events-none rounded-[8px]" />
+      <InstMeta2 />
+      <StatusBadge2 />
+    </div>
+  );
+}
+
+function InstList() {
+  return (
+    <div className="content-stretch flex flex-col gap-[12px] items-start relative shrink-0 w-full" data-name="inst-list">
+      <InstRow />
+      <InstRow1 />
+      <InstRow2 />
+    </div>
+  );
+}
+
+function InstallationsCard() {
+  return (
+    <div className="bg-white content-stretch drop-shadow-[0px_1px_1.5px_rgba(0,0,0,0.03)] flex flex-col gap-[16px] items-start p-[24px] relative rounded-[12px] shrink-0 w-[460px]" data-name="installations-card">
+      <div aria-hidden className="absolute border border-[#e2e8f0] border-solid inset-0 pointer-events-none rounded-[12px]" />
+      <InstHeader />
+      <InstList />
+    </div>
+  );
+}
+
+function MidSplitRow() {
+  return (
+    <div className="content-stretch flex gap-[24px] items-start relative shrink-0 w-full" data-name="mid-split-row">
+      <ChartCardContainer />
+      <InstallationsCard />
+    </div>
+  );
+}
+
+function ChequesTitleGroup() {
+  return (
+    <div className="[word-break:break-word] content-stretch flex flex-col gap-[4px] items-start leading-[normal] relative shrink-0 whitespace-nowrap" data-name="cheques-title-group">
+      <p className="font-['Geist:SemiBold',sans-serif] font-semibold relative shrink-0 text-[#0f172a] text-[16px]">Alertas de Cheques a Vencer</p>
+      <p className="font-['Geist:Regular',sans-serif] font-normal relative shrink-0 text-[#94a3b8] text-[12px]">Cheques en cartera próximos a ser depositados</p>
+    </div>
+  );
+}
+
+function StatusBadge3() {
+  return (
+    <div className="bg-[#fee2e2] content-stretch flex items-start px-[8px] py-[4px] relative rounded-[6px] shrink-0" data-name="status-badge">
+      <p className="[word-break:break-word] font-['Geist:SemiBold',sans-serif] font-semibold leading-[normal] relative shrink-0 text-[#ef4444] text-[12px] whitespace-nowrap">Crítico</p>
+    </div>
+  );
+}
+
+function ChequesHeader() {
+  return (
+    <div className="content-stretch flex items-center justify-between relative shrink-0 w-full" data-name="cheques-header">
+      <ChequesTitleGroup />
+      <StatusBadge3 />
+    </div>
+  );
+}
+
+function ThRow() {
+  return (
+    <div className="[word-break:break-word] bg-[#f8fafc] content-stretch flex font-['Geist:SemiBold',sans-serif] font-semibold items-start leading-[normal] px-[16px] py-[10px] relative rounded-[6px] shrink-0 text-[#475569] text-[12px] w-full" data-name="th-row">
+      <p className="relative shrink-0 w-[200px]">Banco</p>
+      <p className="relative shrink-0 w-[150px]">Número</p>
+      <p className="relative shrink-0 w-[150px]">Monto</p>
+      <p className="relative shrink-0 w-[180px]">Vencimiento</p>
+      <p className="flex-[1_0_0] min-w-px relative">Estado</p>
+    </div>
+  );
+}
+
+function StatusBadge4() {
+  return (
+    <div className="bg-[#fef3c7] content-stretch flex items-start px-[8px] py-[4px] relative rounded-[6px] shrink-0" data-name="status-badge">
+      <p className="[word-break:break-word] font-['Geist:SemiBold',sans-serif] font-semibold leading-[normal] relative shrink-0 text-[#f59e0b] text-[12px] whitespace-nowrap">Pendiente</p>
+    </div>
+  );
+}
+
+function BadgeCell() {
+  return (
+    <div className="content-stretch flex flex-[1_0_0] items-start min-w-px relative" data-name="badge-cell">
+      <StatusBadge4 />
+    </div>
+  );
+}
+
+function ChqRow() {
+  return (
+    <div className="content-stretch flex items-center px-[16px] py-[12px] relative shrink-0 w-full" data-name="chq-row-0">
+      <div aria-hidden className="absolute border-[#e2e8f0] border-b border-solid inset-0 pointer-events-none" />
+      <p className="[word-break:break-word] font-['Geist:Medium',sans-serif] font-medium leading-[normal] relative shrink-0 text-[#0f172a] text-[14px] w-[200px]">Banco Galicia</p>
+      <p className="[word-break:break-word] font-['Geist:Regular',sans-serif] font-normal leading-[normal] relative shrink-0 text-[#475569] text-[14px] w-[150px]">CHQ-002931</p>
+      <p className="[word-break:break-word] font-['Geist:SemiBold',sans-serif] font-semibold leading-[normal] relative shrink-0 text-[#0f172a] text-[14px] w-[150px]">$450.000</p>
+      <p className="[word-break:break-word] font-['Geist:Medium',sans-serif] font-medium leading-[normal] relative shrink-0 text-[#ef4444] text-[14px] w-[180px]">En 2 días (14 Ago)</p>
+      <BadgeCell />
+    </div>
+  );
+}
+
+function StatusBadge5() {
+  return (
+    <div className="bg-[#fef3c7] content-stretch flex items-start px-[8px] py-[4px] relative rounded-[6px] shrink-0" data-name="status-badge">
+      <p className="[word-break:break-word] font-['Geist:SemiBold',sans-serif] font-semibold leading-[normal] relative shrink-0 text-[#f59e0b] text-[12px] whitespace-nowrap">Pendiente</p>
+    </div>
+  );
+}
+
+function BadgeCell1() {
+  return (
+    <div className="content-stretch flex flex-[1_0_0] items-start min-w-px relative" data-name="badge-cell">
+      <StatusBadge5 />
+    </div>
+  );
+}
+
+function ChqRow1() {
+  return (
+    <div className="content-stretch flex items-center px-[16px] py-[12px] relative shrink-0 w-full" data-name="chq-row-1">
+      <div aria-hidden className="absolute border-[#e2e8f0] border-b border-solid inset-0 pointer-events-none" />
+      <p className="[word-break:break-word] font-['Geist:Medium',sans-serif] font-medium leading-[normal] relative shrink-0 text-[#0f172a] text-[14px] w-[200px]">Nuevo Banco de Entre Ríos</p>
+      <p className="[word-break:break-word] font-['Geist:Regular',sans-serif] font-normal leading-[normal] relative shrink-0 text-[#475569] text-[14px] w-[150px]">CHQ-004822</p>
+      <p className="[word-break:break-word] font-['Geist:SemiBold',sans-serif] font-semibold leading-[normal] relative shrink-0 text-[#0f172a] text-[14px] w-[150px]">$320.000</p>
+      <p className="[word-break:break-word] font-['Geist:Medium',sans-serif] font-medium leading-[normal] relative shrink-0 text-[#ef4444] text-[14px] w-[180px]">En 5 días (17 Ago)</p>
+      <BadgeCell1 />
+    </div>
+  );
+}
+
+function StatusBadge6() {
+  return (
+    <div className="bg-[#fef3c7] content-stretch flex items-start px-[8px] py-[4px] relative rounded-[6px] shrink-0" data-name="status-badge">
+      <p className="[word-break:break-word] font-['Geist:SemiBold',sans-serif] font-semibold leading-[normal] relative shrink-0 text-[#f59e0b] text-[12px] whitespace-nowrap">Pendiente</p>
+    </div>
+  );
+}
+
+function BadgeCell2() {
+  return (
+    <div className="content-stretch flex flex-[1_0_0] items-start min-w-px relative" data-name="badge-cell">
+      <StatusBadge6 />
+    </div>
+  );
+}
+
+function ChqRow2() {
+  return (
+    <div className="content-stretch flex items-center px-[16px] py-[12px] relative shrink-0 w-full" data-name="chq-row-2">
+      <div aria-hidden className="absolute border-[#e2e8f0] border-b border-solid inset-0 pointer-events-none" />
+      <p className="[word-break:break-word] font-['Geist:Medium',sans-serif] font-medium leading-[normal] relative shrink-0 text-[#0f172a] text-[14px] w-[200px]">Banco Nación</p>
+      <p className="[word-break:break-word] font-['Geist:Regular',sans-serif] font-normal leading-[normal] relative shrink-0 text-[#475569] text-[14px] w-[150px]">CHQ-001202</p>
+      <p className="[word-break:break-word] font-['Geist:SemiBold',sans-serif] font-semibold leading-[normal] relative shrink-0 text-[#0f172a] text-[14px] w-[150px]">$600.000</p>
+      <p className="[word-break:break-word] font-['Geist:Medium',sans-serif] font-medium leading-[normal] relative shrink-0 text-[#ef4444] text-[14px] w-[180px]">En 8 días (20 Ago)</p>
+      <BadgeCell2 />
+    </div>
+  );
+}
+
+function ChequesTable() {
+  return (
+    <div className="content-stretch flex flex-col items-start relative shrink-0 w-full" data-name="cheques-table">
+      <ThRow />
+      <ChqRow />
+      <ChqRow1 />
+      <ChqRow2 />
+    </div>
+  );
+}
+
+function ChequesAlertCard() {
+  return (
+    <div className="bg-white content-stretch drop-shadow-[0px_1px_1.5px_rgba(0,0,0,0.03)] flex flex-col gap-[16px] items-start p-[24px] relative rounded-[12px] shrink-0 w-full" data-name="cheques-alert-card">
+      <div aria-hidden className="absolute border border-[#e2e8f0] border-solid inset-0 pointer-events-none rounded-[12px]" />
+      <ChequesHeader />
+      <ChequesTable />
+    </div>
+  );
+}
+
+function ScrollableContent() {
+  return (
+    <div className="content-stretch flex flex-col gap-[24px] items-start p-[32px] relative shrink-0 w-full" data-name="scrollable-content">
+      <KpiRow />
+      <MidSplitRow />
+      <ChequesAlertCard />
+    </div>
+  );
+}
+
+function MainBody() {
+  return (
+    <div className="content-stretch flex flex-[1_0_0] flex-col items-start min-w-px relative self-stretch" data-name="main-body">
+      <Header />
+      <ScrollableContent />
+    </div>
+  );
+}
+
+export default function DashboardAdmin() {
+  return (
+    <div className="bg-[#f8fafc] content-stretch flex items-start relative size-full" data-name="Dashboard – Admin">
+      <Sidebar />
+      <MainBody />
+    </div>
+  );
+}
