@@ -1,5 +1,6 @@
 import { useNavigate, useParams } from "react-router-dom";
 import AppLayout from "@/layouts/AppLayout";
+import { proveedores } from "@/data/proveedores";
 
 interface Compra {
   fecha: string;
@@ -8,30 +9,17 @@ interface Compra {
   estado: "Recibido" | "En Tránsito" | "Pendiente";
 }
 
-interface ProveedorDetalle {
-  id: string;
-  razonSocial: string;
-  cuit: string;
-  contacto: string;
-  email: string;
-  telefono: string;
-  direccion: string;
-  localidad: string;
-  rubro: string;
-  estado: "Activo" | "Inactivo" | "Suspendido" | "Pendiente";
+interface ProveedorDetalleData {
   cbu: string;
   alias: string;
-  ultimoPedido: string;
   notas: string;
   historial: Compra[];
 }
 
-const proveedoresData: Record<string, ProveedorDetalle> = {
+const proveedoresDetalleData: Record<string, ProveedorDetalleData> = {
   "1": {
-    id: "1", razonSocial: "Distribuidora Técnica SRL", cuit: "30-71234567-9", contacto: "Carlos Méndez",
-    email: "carlos@distribuidoratecnica.com", telefono: "343-4551234", direccion: "Av. 25 de Mayo 1230",
-    localidad: "Paraná", rubro: "Bombas", estado: "Activo", cbu: "0150017801000012345678", alias: "DISTECNICA",
-    ultimoPedido: "20/07/2026", notas: "Proveedor principal de bombas Vulcano. Entregas en 48-72hs hábiles. Garantía de 12 meses.",
+    cbu: "0150017801000012345678", alias: "DISTECNICA",
+    notas: "Proveedor principal de bombas Vulcano. Entregas en 48-72hs hábiles. Garantía de 12 meses.",
     historial: [
       { fecha: "20/07/2026", descripcion: "Bomba Vulcano 1HP × 3 unidades", monto: "$1.350.000", estado: "Recibido" },
       { fecha: "05/06/2026", descripcion: "Bomba Vulcano 1/2 HP × 2 unidades", monto: "$680.000", estado: "Recibido" },
@@ -39,10 +27,8 @@ const proveedoresData: Record<string, ProveedorDetalle> = {
     ],
   },
   "2": {
-    id: "2", razonSocial: "Piletecno SA", cuit: "30-72345678-0", contacto: "Laura Giménez",
-    email: "lgimenez@piletecno.com.ar", telefono: "341-4567890", direccion: "Calle Entre Ríos 456",
-    localidad: "Santa Fe", rubro: "Piletas", estado: "Activo", cbu: "0150017801000023456789", alias: "PILETECNO",
-    ultimoPedido: "15/07/2026", notas: "Fabricante de piletas de fibra de vidrio. Plazos de entrega: 15-20 días hábiles según modelo.",
+    cbu: "0150017801000023456789", alias: "PILETECNO",
+    notas: "Fabricante de piletas de fibra de vidrio. Plazos de entrega: 15-20 días hábiles según modelo.",
     historial: [
       { fecha: "15/07/2026", descripcion: "Pileta Roma 6×3 × 1 unidad", monto: "$1.950.000", estado: "Recibido" },
       { fecha: "20/06/2026", descripcion: "Pileta Venecia 5×2.5 × 2 unidades", monto: "$3.200.000", estado: "Recibido" },
@@ -50,10 +36,8 @@ const proveedoresData: Record<string, ProveedorDetalle> = {
     ],
   },
   "3": {
-    id: "3", razonSocial: "Químicos del Litoral", cuit: "30-73456789-1", contacto: "Roberto Álvarez",
-    email: "ralvarez@quimicoslitoral.com", telefono: "343-5678901", direccion: "Ruta 11 km 5",
-    localidad: "Paraná", rubro: "Químicos", estado: "Activo", cbu: "0150017801000034567890", alias: "QUIMLITORAL",
-    ultimoPedido: "10/08/2026", notas: "Proveedores de cloro, pH, algicidas y productos de mantenimiento. Entregas semanales.",
+    cbu: "0150017801000034567890", alias: "QUIMLITORAL",
+    notas: "Proveedores de cloro, pH, algicidas y productos de mantenimiento. Entregas semanales.",
     historial: [
       { fecha: "10/08/2026", descripcion: "Cloro granulado 50kg × 4 sacos", monto: "$180.000", estado: "En Tránsito" },
       { fecha: "27/07/2026", descripcion: "Kit mantenimiento químico completo", monto: "$95.000", estado: "Recibido" },
@@ -61,10 +45,8 @@ const proveedoresData: Record<string, ProveedorDetalle> = {
     ],
   },
   "4": {
-    id: "4", razonSocial: "Accesorios Pool SA", cuit: "30-74567890-2", contacto: "María López",
-    email: "mlopez@accesoriospool.com", telefono: "341-6789012", direccion: "San Martín 789",
-    localidad: "Rosario", rubro: "Accesorios", estado: "Suspendido", cbu: "0150017801000045678901", alias: "ACCPPOOL",
-    ultimoPedido: "01/06/2026", notas: "Proveedor suspendido por problemas de calidad en últimas entregas. Evaluar reactivación en septiembre.",
+    cbu: "0150017801000045678901", alias: "ACCPPOOL",
+    notas: "Proveedor suspendido por problemas de calidad en últimas entregas. Evaluar reactivación en septiembre.",
     historial: [
       { fecha: "01/06/2026", descripcion: "Skimmer plástico × 10 unidades", monto: "$350.000", estado: "Recibido" },
       { fecha: "15/05/2026", descripcion: "Boquillas de hidromasaje × 20", monto: "$180.000", estado: "Recibido" },
@@ -72,10 +54,8 @@ const proveedoresData: Record<string, ProveedorDetalle> = {
     ],
   },
   "5": {
-    id: "5", razonSocial: "Herramientas Maibach", cuit: "30-75678901-3", contacto: "Jorge Maibach",
-    email: "jmaibach@herramientasmaibach.com", telefono: "343-7890123", direccion: "Belgrano 1024",
-    localidad: "Paraná", rubro: "Herramientas", estado: "Activo", cbu: "0150017801000056789012", alias: "HERRMAIBACH",
-    ultimoPedido: "25/07/2026", notas: "Sucursal de herramientas propias. Stock permanente. Descuento del 15% por volume.",
+    cbu: "0150017801000056789012", alias: "HERRMAIBACH",
+    notas: "Sucursal de herramientas propias. Stock permanente. Descuento del 15% por volume.",
     historial: [
       { fecha: "25/07/2026", descripcion: "LlaveStillson 18\" × 4 unidades", monto: "$120.000", estado: "Recibido" },
       { fecha: "10/07/2026", descripcion: "Taladro percutor + brocas × 2 kits", monto: "$280.000", estado: "Recibido" },
@@ -83,17 +63,13 @@ const proveedoresData: Record<string, ProveedorDetalle> = {
     ],
   },
   "6": {
-    id: "6", razonSocial: "Fibras Industriales SR", cuit: "30-76789012-4", contacto: "Pedro Suárez",
-    email: "psuarez@fibrasindustriales.com", telefono: "341-8901234", direccion: "Mitre 2048",
-    localidad: "Santa Fe", rubro: "Piletas", estado: "Pendiente", cbu: "0150017801000067890123", alias: "FIBRAIND",
-    ultimoPedido: "—", notas: "Proveedor nuevo en proceso de verificación. Pendiente de revisar muestras y condiciones comerciales.",
+    cbu: "0150017801000067890123", alias: "FIBRAIND",
+    notas: "Proveedor nuevo en proceso de verificación. Pendiente de revisar muestras y condiciones comerciales.",
     historial: [],
   },
   "7": {
-    id: "7", razonSocial: "Sistemas de Filtrado SA", cuit: "30-77890123-5", contacto: "Ana Martínez",
-    email: "amartinez@sistemasfiltrado.com", telefono: "343-9012345", direccion: "San Lorenzo 333",
-    localidad: "Paraná", rubro: "Accesorios", estado: "Activo", cbu: "0150017801000078901234", alias: "SISTFILTRADO",
-    ultimoPedido: "05/08/2026", notas: "Filtros de arena, cartuchos y sistemas de depuración. Garantía de 24 meses en equipos.",
+    cbu: "0150017801000078901234", alias: "SISTFILTRADO",
+    notas: "Filtros de arena, cartuchos y sistemas de depuración. Garantía de 24 meses en equipos.",
     historial: [
       { fecha: "05/08/2026", descripcion: "Filtro de arena 600mm × 2 unidades", monto: "$860.000", estado: "Pendiente" },
       { fecha: "18/07/2026", descripcion: "Cartuchos de repuesto × 12", monto: "$144.000", estado: "Recibido" },
@@ -101,10 +77,8 @@ const proveedoresData: Record<string, ProveedorDetalle> = {
     ],
   },
   "8": {
-    id: "8", razonSocial: "Electricidad y Bombas SRL", cuit: "30-78901234-6", contacto: "Fernando Gómez",
-    email: "fgomez@electricidadybombas.com", telefono: "341-0123456", direccion: "Corrientes 567",
-    localidad: "Rosario", rubro: "Bombas", estado: "Inactivo", cbu: "0150017801000089012345", alias: "ELECBOMBAS",
-    ultimoPedido: "12/04/2026", notas: "Proveedor inactivo. Cerró operaciones en la zona. Buscar alternativa para bombas eléctricas.",
+    cbu: "0150017801000089012345", alias: "ELECBOMBAS",
+    notas: "Proveedor inactivo. Cerró operaciones en la zona. Buscar alternativa para bombas eléctricas.",
     historial: [
       { fecha: "12/04/2026", descripcion: "Bomba eléctrica 2HP × 1 unidad", monto: "$480.000", estado: "Recibido" },
       { fecha: "01/03/2026", descripcion: "Tablero eléctrico para bomba × 3", monto: "$270.000", estado: "Recibido" },
@@ -128,7 +102,10 @@ const compraEstadoStyle: Record<string, { bg: string; color: string }> = {
 export default function ProveedorDetalle() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const proveedor = proveedoresData[id ?? "1"] ?? proveedoresData["1"]!;
+  const proveedorId = id ?? "1";
+  const proveedorBase = proveedores.find((p) => p.id === proveedorId) ?? proveedores[0]!;
+  const detalle = proveedoresDetalleData[proveedorBase.id] ?? proveedoresDetalleData["1"]!;
+  const proveedor = { ...proveedorBase, ...detalle };
 
   const totalCompras = proveedor.historial.reduce((acc, c) => {
     const num = Number(c.monto.replace(/[$.]/g, "").replace(",", "."));
