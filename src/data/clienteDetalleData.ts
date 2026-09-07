@@ -15,6 +15,8 @@ export interface FicheroForm {
   equipoFiltrado: string;
   manoObraVereda: boolean;
   costoManoObra: string;
+  tipoCobro: "libre" | "cuotas";
+  cantCuotas: number;
 }
 
 export interface Pago {
@@ -37,6 +39,7 @@ export interface Cuota {
   comprobante: string;
   observaciones: string;
   estado: "Pendiente" | "Parcial" | "Pagada";
+  descripcion?: string;
 }
 
 export interface FicheroGuardado {

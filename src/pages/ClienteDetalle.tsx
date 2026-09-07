@@ -1,15 +1,51 @@
-import { useState } from "react";
-import { useNavigate, useParams, useLocation } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import AppLayout from "@/layouts/AppLayout";
 import { proveedores } from "@/data/proveedores";
 import {
-  clientesDataInit, estadoStyle, vendedores, metodosPago, metodoColor,
-  formatCurrency, parseCurrencyInput, getCurrentDate, getFicheroResumen,
-  type FicheroItem, type FicheroForm, type Pago, type FicheroGuardado, type HistorialEntry,
+  vendedores, metodosPago,
+  formatCurrency, parseCurrencyInput, getCurrentDate,
+  type FicheroItem, type FicheroForm,
 } from "@/data/clienteDetalleData";
+import { getCliente, saveFichero, registrarPagoInicial, generarPlanCuotas, agregarCargo, editarCuota, registrarCobro, eliminarCuota } from "@/services/api";
 
-interface ClienteState {
-  id: number;
+interface Cuota {
+  id: string;
+  nro: number;
+  fechaVencimiento: string;
+  montoPlanificado: number;
+  montoPagado: number;
+  fechaPago: string | null;
+  metodo: string | null;
+  comprobante: string;
+  observaciones: string;
+  estado: "Pendiente" | "Parcial" | "Pagada";
+  descripcion?: string;
+}
+
+interface FicheroData {
+  fecha: string;
+  vendedor: string;
+  comision: string;
+  items: { desc: string; cant: string; precio: string }[];
+  total: string;
+  costos: {
+    venta: string;
+    proveedor: string;
+    costoPiscina: string;
+    instalacion: string;
+    equipoFiltrado: string;
+    manoObraVereda: string;
+    comision: string;
+    totalCostos: string;
+    margenNeto: string;
+    margenPct: string;
+  };
+  cuotas: Cuota[];
+}
+
+interface ClienteData {
+  id: string;
   nombre: string;
   direccion: string;
   localidad: string;
@@ -18,36 +54,84 @@ interface ClienteState {
   dni: string;
   fechaAlta: string;
   estado: string;
-  ultimoPedido: string;
+  fichero: FicheroData | null;
+  cuotas: any[];
 }
+
+function mapCuota(c: any): Cuota {
+  return {
+    id: c.id,
+    nro: c.nroCuota,
+    fechaVencimiento: c.fechaVencimiento,
+    montoPlanificado: c.montoPlanificado,
+    montoPagado: c.montoPagado,
+    fechaPago: c.fechaPago || null,
+    metodo: c.metodo || null,
+    comprobante: c.comprobante || "",
+    observaciones: c.observaciones || "",
+    estado: c.estado,
+    descripcion: c.descripcion || undefined,
+  };
+}
+
+function mapFichero(raw: any, cuotasRaw: any[]): FicheroData {
+  let items: { desc: string; cant: string; precio: string }[] = [];
+  let costos: FicheroData["costos"] = {
+    venta: "", proveedor: "", costoPiscina: "", instalacion: "",
+    equipoFiltrado: "", manoObraVereda: "", comision: "",
+    totalCostos: "", margenNeto: "", margenPct: "",
+  };
+  try { items = JSON.parse(raw.items || "[]"); } catch { /* ok */ }
+  try { costos = JSON.parse(raw.costos || "{}"); } catch { /* ok */ }
+  return {
+    fecha: raw.fecha,
+    vendedor: raw.vendedor,
+    comision: raw.comision || "",
+    items,
+    total: raw.total || "$0",
+    costos,
+    cuotas: cuotasRaw.map(mapCuota),
+  };
+}
+
+const estadoStyle: Record<string, { bg: string; color: string }> = {
+  Activo: { bg: "#d1fae5", color: "#10b981" },
+  Moroso: { bg: "#fef3c7", color: "#f59e0b" },
+  Inactivo: { bg: "#fee2e2", color: "#ef4444" },
+};
 
 export default function ClienteDetalle() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const location = useLocation();
-  const stateCliente = (location.state as { cliente?: ClienteState } | null)?.cliente;
 
-  const clienteData = clientesDataInit[id ?? "1"];
-  const tieneDatosCompletos = !!clienteData;
+  const [cliente, setCliente] = useState<ClienteData | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const cliente = tieneDatosCompletos
-    ? clienteData
-    : stateCliente
-      ? {
-          nombre: stateCliente.nombre,
-          direccion: stateCliente.direccion || "-",
-          localidad: stateCliente.localidad,
-          telefono: stateCliente.telefono,
-          email: stateCliente.email || "-",
-          dni: stateCliente.dni,
-          fechaAlta: stateCliente.fechaAlta,
-          estado: stateCliente.estado,
-          ficheroActual: null,
-          historial: [],
-        }
-      : clientesDataInit["1"]!;
+  useEffect(() => {
+    if (!id) return;
+    setLoading(true);
+    getCliente(id)
+      .then((data) => {
+        setCliente({
+          id: data.id,
+          nombre: data.nombre,
+          direccion: data.direccion || "-",
+          localidad: data.localidad || "",
+          telefono: data.telefono || "",
+          email: data.email || "-",
+          dni: data.dni || "",
+          fechaAlta: data.fechaAlta,
+          estado: data.estado || "Activo",
+          fichero: data.fichero ? mapFichero(data.fichero, data.cuotas || []) : null,
+          cuotas: data.cuotas || [],
+        });
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [id]);
 
-  const sinFichero = !cliente.ficheroActual;
+  const sinFichero = !cliente?.fichero;
+  const tieneCobros = (cliente?.fichero?.cuotas.length ?? 0) > 0;
 
   // Tab state
   const [activeTab, setActiveTab] = useState<"fichero" | "pagos">("fichero");
@@ -65,20 +149,34 @@ export default function ClienteDetalle() {
     equipoFiltrado: "",
     manoObraVereda: false,
     costoManoObra: "",
+    tipoCobro: "libre",
+    cantCuotas: 3,
   });
   const [ficheroErrors, setFicheroErrors] = useState<Record<string, string>>({});
 
-  // Pago modal states
-  const [showPagoModal, setShowPagoModal] = useState(false);
-  const [editingPago, setEditingPago] = useState<Pago | null>(null);
-  const [pagoForm, setPagoForm] = useState({
-    fecha: getCurrentDate(),
-    monto: "",
-    metodo: "Transferencia",
-    comprobante: "",
-    observaciones: "",
-  });
-  const [pagoErrors, setPagoErrors] = useState<Record<string, string>>({});
+  // Unified cobros states
+  const [editingCuota, setEditingCuota] = useState<Cuota | null>(null);
+  const [showGenerarPlanModal, setShowGenerarPlanModal] = useState(false);
+  const [showAgregarCargoModal, setShowAgregarCargoModal] = useState(false);
+  const [showIngresarCobroModal, setShowIngresarCobroModal] = useState(false);
+  const [showEditarCuotaModal, setShowEditarCuotaModal] = useState(false);
+  const [showEliminarCuotaConfirm, setShowEliminarCuotaConfirm] = useState(false);
+  const [showPagoInicialModal, setShowPagoInicialModal] = useState(false);
+
+  const [cantCuotas, setCantCuotas] = useState(3);
+  const [fechaPrimerVto, setFechaPrimerVto] = useState(getCurrentDate());
+
+  const [pagoInicialForm, setPagoInicialForm] = useState({ monto: "", metodo: "Transferencia", comprobante: "", observaciones: "" });
+  const [pagoInicialErrors, setPagoInicialErrors] = useState<Record<string, string>>({});
+
+  const [cargoForm, setCargoForm] = useState({ fecha: getCurrentDate(), monto: "", descripcion: "" });
+  const [cargoErrors, setCargoErrors] = useState<Record<string, string>>({});
+
+  const [cobroForm, setCobroForm] = useState({ fecha: getCurrentDate(), monto: "", metodo: "Transferencia", comprobante: "", observaciones: "" });
+  const [cobroErrors, setCobroErrors] = useState<Record<string, string>>({});
+
+  const [cuotaForm, setCuotaForm] = useState({ fechaVencimiento: "", montoPlanificado: "" });
+  const [cuotaFormErrors, setCuotaFormErrors] = useState<Record<string, string>>({});
 
   // Fichero calculated values
   const itemsSubtotales = ficheroForm.items.map((item) => {
@@ -97,13 +195,35 @@ export default function ClienteDetalle() {
   const margenNeto = importeTotal - totalCostos;
   const margenPct = importeTotal > 0 ? (margenNeto / importeTotal) * 100 : 0;
 
-  // Pago calculated values
-  const ficheroTotal = cliente.ficheroActual ? parseCurrencyInput(cliente.ficheroActual.total) : 0;
-  const totalPagado = cliente.ficheroActual?.pagos.reduce((sum, p) => sum + p.monto, 0) ?? 0;
-  const saldoPendiente = ficheroTotal - totalPagado;
-  const porcentajePagado = ficheroTotal > 0 ? (totalPagado / ficheroTotal) * 100 : 0;
-  const estaPagado = saldoPendiente <= 0;
-  const saldoDespuesPago = saldoPendiente - parseCurrencyInput(pagoForm.monto);
+  // Unified cobros computed values
+  const ficheroTotal = cliente?.fichero ? parseCurrencyInput(cliente.fichero.total) : 0;
+  const tienePagoInicial = (cliente?.fichero?.cuotas ?? []).some((c) => c.nro === 0);
+  const pagoInicialMonto = cliente?.fichero?.cuotas.find((c) => c.nro === 0)?.montoPlanificado ?? 0;
+  const totalCostoCobros = cliente?.fichero?.cuotas.filter((c) => c.nro > 0).reduce((sum, cu) => sum + cu.montoPlanificado, 0) ?? 0;
+  const totalIngresos = cliente?.fichero?.cuotas.reduce((sum, cu) => sum + cu.montoPagado, 0) ?? 0;
+  const saldoPendienteTotal = ficheroTotal - totalIngresos;
+  const saldoParaCuotas = ficheroTotal - pagoInicialMonto;
+  const porcentajePagado = ficheroTotal > 0 ? (totalIngresos / ficheroTotal) * 100 : 0;
+  const estaPagado = saldoPendienteTotal <= 0 && ficheroTotal > 0;
+
+  function reloadCliente() {
+    if (!id) return;
+    getCliente(id).then((data) => {
+      setCliente({
+        id: data.id,
+        nombre: data.nombre,
+        direccion: data.direccion || "-",
+        localidad: data.localidad || "",
+        telefono: data.telefono || "",
+        email: data.email || "-",
+        dni: data.dni || "",
+        fechaAlta: data.fechaAlta,
+        estado: data.estado || "Activo",
+        fichero: data.fichero ? mapFichero(data.fichero, data.cuotas || []) : null,
+        cuotas: data.cuotas || [],
+      });
+    }).catch(console.error);
+  }
 
   // --- Fichero handlers ---
   function handleFicheroChange(field: keyof FicheroForm, value: string | boolean) {
@@ -159,8 +279,8 @@ export default function ClienteDetalle() {
     return Object.keys(errors).length === 0;
   }
 
-  function handleGuardarFichero() {
-    if (!validateFichero()) return;
+  async function handleGuardarFichero() {
+    if (!validateFichero() || !id) return;
 
     const comisionPctVal = parseCurrencyInput(ficheroForm.comisionPct);
     const comisionStr = `${comisionPctVal}% (${formatCurrency(comisionDolar)})`;
@@ -178,63 +298,50 @@ export default function ClienteDetalle() {
         };
       });
 
-    const nuevoFichero: FicheroGuardado = {
-      fecha: ficheroForm.fecha,
-      vendedor: ficheroForm.vendedor,
-      comision: comisionStr,
-      items: itemsGuardados,
-      total: formatCurrency(importeTotal),
-      costos: {
-        venta: formatCurrency(importeTotal),
-        proveedor: proveedorNombre,
-        costoPiscina: formatCurrency(costoPiscina),
-        instalacion: formatCurrency(costoInst),
-        equipoFiltrado: formatCurrency(costoEquipo),
-        manoObraVereda: ficheroForm.manoObraVereda ? formatCurrency(costoManoObra) : "No aplica",
-        comision: formatCurrency(comisionDolar),
-        totalCostos: formatCurrency(totalCostos),
-        margenNeto: formatCurrency(margenNeto),
-        margenPct: `${margenPct.toFixed(1)}%`,
-      },
-      pagos: [],
-      cuotas: [],
+    const costos = {
+      venta: formatCurrency(importeTotal),
+      proveedor: proveedorNombre,
+      costoPiscina: formatCurrency(costoPiscina),
+      instalacion: formatCurrency(costoInst),
+      equipoFiltrado: formatCurrency(costoEquipo),
+      manoObraVereda: ficheroForm.manoObraVereda ? formatCurrency(costoManoObra) : "No aplica",
+      comision: formatCurrency(comisionDolar),
+      totalCostos: formatCurrency(totalCostos),
+      margenNeto: formatCurrency(margenNeto),
+      margenPct: `${margenPct.toFixed(1)}%`,
     };
 
-    const now = new Date();
-    const meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
-    const fechaDisplay = `${String(now.getDate()).padStart(2, "0")} ${meses[now.getMonth()]}, ${now.getFullYear()}`;
-
-    const nuevoHistorialEntry: HistorialEntry = {
-      fecha: fechaDisplay,
-      vendedor: ficheroForm.vendedor.split(" ")[0] + " " + ficheroForm.vendedor.split(" ")[1]?.[0] + ".",
-      articulos: `Fichero Actual: ${getFicheroResumen(ficheroForm.items)}`,
-      importe: formatCurrency(importeTotal),
-      isCurrent: true,
-    };
-
-    if (tieneDatosCompletos) {
-      clientesDataInit[id ?? "1"]!.historial = clientesDataInit[id ?? "1"]!.historial.map((h) => ({
-        ...h,
-        isCurrent: false,
-      }));
-      clientesDataInit[id ?? "1"]!.ficheroActual = nuevoFichero;
-      clientesDataInit[id ?? "1"]!.historial.push(nuevoHistorialEntry);
+    try {
+      await saveFichero(id, {
+        fecha: ficheroForm.fecha,
+        vendedor: ficheroForm.vendedor,
+        comision: comisionStr,
+        items: itemsGuardados,
+        total: formatCurrency(importeTotal),
+        costos,
+        tipoCobro: ficheroForm.tipoCobro,
+        cantCuotas: ficheroForm.cantCuotas,
+      });
+      reloadCliente();
+      setShowFicheroModal(false);
+      setFicheroForm({
+        fecha: getCurrentDate(),
+        vendedor: vendedores[0] ?? "",
+        comisionPct: "5",
+        items: [{ desc: "", cant: "1", precioUnitario: "" }],
+        proveedorPiscina: proveedores[0]?.id ?? "",
+        costoPiscina: "",
+        costoInstalacion: "",
+        equipoFiltrado: "",
+        manoObraVereda: false,
+        costoManoObra: "",
+        tipoCobro: "libre",
+        cantCuotas: 3,
+      });
+      setFicheroErrors({});
+    } catch (e) {
+      console.error(e);
     }
-
-    setShowFicheroModal(false);
-    setFicheroForm({
-      fecha: getCurrentDate(),
-      vendedor: vendedores[0] ?? "",
-      comisionPct: "5",
-      items: [{ desc: "", cant: "1", precioUnitario: "" }],
-      proveedorPiscina: proveedores[0]?.id ?? "",
-      costoPiscina: "",
-      costoInstalacion: "",
-      equipoFiltrado: "",
-      manoObraVereda: false,
-      costoManoObra: "",
-    });
-    setFicheroErrors({});
   }
 
   function handleCloseFicheroModal() {
@@ -242,97 +349,143 @@ export default function ClienteDetalle() {
     setFicheroErrors({});
   }
 
-  // --- Pago handlers ---
-  function handleOpenPagoModal(pago?: Pago) {
-    if (pago) {
-      setEditingPago(pago);
-      setPagoForm({
-        fecha: pago.fecha,
-        monto: String(pago.monto),
-        metodo: pago.metodo,
-        comprobante: pago.comprobante,
-        observaciones: pago.observaciones,
-      });
-    } else {
-      setEditingPago(null);
-      setPagoForm({
-        fecha: getCurrentDate(),
-        monto: "",
-        metodo: "Transferencia",
-        comprobante: "",
-        observaciones: "",
-      });
-    }
-    setPagoErrors({});
-    setShowPagoModal(true);
-  }
-
-  function handleClosePagoModal() {
-    setShowPagoModal(false);
-    setEditingPago(null);
-    setPagoErrors({});
-  }
-
-  function handlePagoChange(field: string, value: string) {
-    setPagoForm((prev) => ({ ...prev, [field]: value }));
-    if (pagoErrors[field]) setPagoErrors((prev) => ({ ...prev, [field]: "" }));
-  }
-
-  function validatePago(): boolean {
+  // --- Pago Inicial handler ---
+  async function handlePagoInicial() {
+    if (!id) return;
     const errors: Record<string, string> = {};
-    if (!pagoForm.fecha.trim()) errors.fecha = "Requerido";
-
-    const monto = parseCurrencyInput(pagoForm.monto);
+    const monto = parseCurrencyInput(pagoInicialForm.monto);
     if (monto <= 0) errors.monto = "Monto inválido";
-    else if (!editingPago && monto > saldoPendiente) errors.monto = `No puede superar el saldo (${formatCurrency(saldoPendiente)})`;
-    else if (editingPago && monto > saldoPendiente + editingPago.monto) errors.monto = `No puede superar el saldo (${formatCurrency(saldoPendiente + editingPago.monto)})`;
+    if (ficheroTotal > 0 && monto > ficheroTotal) errors.monto = `No puede superar el total del fichero (${formatCurrency(ficheroTotal)})`;
+    if (!pagoInicialForm.metodo) errors.metodo = "Requerido";
+    setPagoInicialErrors(errors);
+    if (Object.keys(errors).length > 0) return;
 
-    if (!pagoForm.metodo) errors.metodo = "Requerido";
-
-    setPagoErrors(errors);
-    return Object.keys(errors).length === 0;
-  }
-
-  function handleAddPago() {
-    if (!validatePago()) return;
-    if (!tieneDatosCompletos || !cliente.ficheroActual) return;
-
-    const monto = parseCurrencyInput(pagoForm.monto);
-
-    if (editingPago) {
-      const pagosActualizados = cliente.ficheroActual.pagos.map((p) =>
-        p.id === editingPago.id
-          ? { ...p, fecha: pagoForm.fecha, monto, metodo: pagoForm.metodo, comprobante: pagoForm.comprobante, observaciones: pagoForm.observaciones }
-          : p
-      );
-      clientesDataInit[id ?? "1"]!.ficheroActual = { ...cliente.ficheroActual, pagos: pagosActualizados };
-    } else {
-      const nuevoPago: Pago = {
-        id: Date.now(),
-        fecha: pagoForm.fecha,
+    try {
+      await registrarPagoInicial(id, {
         monto,
-        metodo: pagoForm.metodo,
-        comprobante: pagoForm.comprobante,
-        observaciones: pagoForm.observaciones,
-      };
-      clientesDataInit[id ?? "1"]!.ficheroActual = {
-        ...cliente.ficheroActual,
-        pagos: [...cliente.ficheroActual.pagos, nuevoPago],
-      };
+        metodo: pagoInicialForm.metodo,
+        comprobante: pagoInicialForm.comprobante,
+        observaciones: pagoInicialForm.observaciones,
+      });
+      reloadCliente();
+      setShowPagoInicialModal(false);
+      setPagoInicialForm({ monto: "", metodo: "Transferencia", comprobante: "", observaciones: "" });
+      setPagoInicialErrors({});
+    } catch (e) {
+      console.error(e);
     }
-
-    setShowPagoModal(false);
-    setEditingPago(null);
-    setPagoForm({ fecha: getCurrentDate(), monto: "", metodo: "Transferencia", comprobante: "", observaciones: "" });
-    setPagoErrors({});
   }
 
-  function handleRemovePago(pagoId: number) {
-    if (!tieneDatosCompletos || !cliente.ficheroActual) return;
-    clientesDataInit[id ?? "1"]!.ficheroActual = {
-      ...cliente.ficheroActual,
-      pagos: cliente.ficheroActual.pagos.filter((p) => p.id !== pagoId),
-    };
+  // --- Cobros handlers ---
+  async function handleGenerarPlan() {
+    if (!id || !cliente?.fichero) return;
+    try {
+      await generarPlanCuotas(id, cantCuotas, fechaPrimerVto);
+      reloadCliente();
+      setShowGenerarPlanModal(false);
+      setCantCuotas(3);
+      setFechaPrimerVto(getCurrentDate());
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  async function handleAgregarCargo() {
+    if (!id || !cliente?.fichero) return;
+    const errors: Record<string, string> = {};
+    if (!cargoForm.fecha.trim()) errors.fecha = "Requerido";
+    const monto = parseCurrencyInput(cargoForm.monto);
+    if (monto <= 0) errors.monto = "Monto inválido";
+    setCargoErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+
+    try {
+      await agregarCargo(id, { fechaVencimiento: cargoForm.fecha, monto, descripcion: cargoForm.descripcion.trim() || undefined });
+      reloadCliente();
+      setShowAgregarCargoModal(false);
+      setCargoForm({ fecha: getCurrentDate(), monto: "", descripcion: "" });
+      setCargoErrors({});
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  function handleOpenIngresarCobro(cuota: Cuota) {
+    setEditingCuota(cuota);
+    const saldoCuota = cuota.montoPlanificado - cuota.montoPagado;
+    setCobroForm({ fecha: getCurrentDate(), monto: String(saldoCuota), metodo: "Transferencia", comprobante: "", observaciones: "" });
+    setCobroErrors({});
+    setShowIngresarCobroModal(true);
+  }
+
+  async function handleIngresarCobro() {
+    if (!id || !editingCuota) return;
+    const errors: Record<string, string> = {};
+    if (!cobroForm.fecha.trim()) errors.fecha = "Requerido";
+    const monto = parseCurrencyInput(cobroForm.monto);
+    const saldoCuota = editingCuota.montoPlanificado - editingCuota.montoPagado;
+    if (monto <= 0) errors.monto = "Monto inválido";
+    else if (monto > saldoCuota) errors.monto = `No puede superar el saldo (${formatCurrency(saldoCuota)})`;
+    if (!cobroForm.metodo) errors.metodo = "Requerido";
+    setCobroErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+
+    try {
+      await registrarCobro(id, editingCuota.id, {
+        monto,
+        metodo: cobroForm.metodo,
+        comprobante: cobroForm.comprobante,
+        observaciones: cobroForm.observaciones,
+      });
+      reloadCliente();
+      setShowIngresarCobroModal(false);
+      setEditingCuota(null);
+      setCobroForm({ fecha: getCurrentDate(), monto: "", metodo: "Transferencia", comprobante: "", observaciones: "" });
+      setCobroErrors({});
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  function handleOpenEditarCuota(cuota: Cuota) {
+    setEditingCuota(cuota);
+    setCuotaForm({ fechaVencimiento: cuota.fechaVencimiento, montoPlanificado: String(cuota.montoPlanificado) });
+    setCuotaFormErrors({});
+    setShowEditarCuotaModal(true);
+  }
+
+  async function handleGuardarEditarCuota() {
+    if (!id || !editingCuota) return;
+    const errors: Record<string, string> = {};
+    if (!cuotaForm.fechaVencimiento.trim()) errors.fechaVencimiento = "Requerido";
+    const monto = parseCurrencyInput(cuotaForm.montoPlanificado);
+    if (monto <= 0) errors.montoPlanificado = "Monto inválido";
+    setCuotaFormErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+
+    try {
+      await editarCuota(id, editingCuota.id, {
+        fechaVencimiento: cuotaForm.fechaVencimiento,
+        montoPlanificado: monto,
+      });
+      reloadCliente();
+      setShowEditarCuotaModal(false);
+      setEditingCuota(null);
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  async function handleConfirmarEliminarCuota() {
+    if (!id || !editingCuota) return;
+    try {
+      await eliminarCuota(id, editingCuota.id);
+      reloadCliente();
+      setShowEliminarCuotaConfirm(false);
+      setEditingCuota(null);
+    } catch (e) {
+      console.error(e);
+    }
   }
 
   const ficheroInputClass = (field: string) =>
@@ -340,10 +493,30 @@ export default function ClienteDetalle() {
       ficheroErrors[field] ? "border-[#ef4444] focus:border-[#ef4444]" : "border-[#e2e8f0] focus:border-[#0ea5e9]"
     }`;
 
-  const pagoInputClass = (field: string) =>
+  const cobroInputClass = (field: string) =>
     `w-full font-['Geist:Regular',sans-serif] text-[14px] text-[#0f172a] px-[12px] py-[9px] rounded-[8px] outline-none transition-colors bg-white ${
-      pagoErrors[field] ? "border-[#ef4444] focus:border-[#ef4444]" : "border-[#e2e8f0] focus:border-[#0ea5e9]"
+      cobroErrors[field] ? "border-[#ef4444] focus:border-[#ef4444]" : "border-[#e2e8f0] focus:border-[#0ea5e9]"
     }`;
+
+  if (loading) {
+    return (
+      <AppLayout breadcrumbs={[{ label: "Clientes", onClick: () => navigate("/clientes") }, { label: "Cargando..." }]}>
+        <div className="p-[32px] flex items-center justify-center h-[400px]">
+          <p className="font-['Geist:Regular',sans-serif] text-[#94a3b8] text-[14px]">Cargando cliente...</p>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (!cliente) {
+    return (
+      <AppLayout breadcrumbs={[{ label: "Clientes", onClick: () => navigate("/clientes") }, { label: "No encontrado" }]}>
+        <div className="p-[32px] flex items-center justify-center h-[400px]">
+          <p className="font-['Geist:Regular',sans-serif] text-[#94a3b8] text-[14px]">Cliente no encontrado</p>
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout breadcrumbs={[
@@ -365,79 +538,41 @@ export default function ClienteDetalle() {
           </div>
         </div>
 
-        <div className="grid grid-cols-[1fr_340px] gap-[24px]">
-          {/* Left */}
-          <div className="flex flex-col gap-[24px]">
-            {/* Info de Contacto */}
-            <div className="bg-white p-[24px] rounded-[12px]" style={{ border: "1px solid #e2e8f0" }}>
-              <div className="flex items-center justify-between mb-[20px]">
-                <p className="font-['Geist:SemiBold',sans-serif] font-semibold text-[#0f172a] text-[16px]">Información de Contacto</p>
-                <span
-                  className="font-['Geist:SemiBold',sans-serif] font-semibold text-[12px] px-[10px] py-[4px] rounded-[6px]"
-                  style={estadoStyle[cliente.estado] ?? { bg: "#f1f5f9", color: "#64748b" }}
-                >
-                  {cliente.estado}
-                </span>
-              </div>
-              <div className="grid grid-cols-2 gap-[16px]">
-                {[
-                  { label: "Dirección", value: cliente.direccion },
-                  { label: "Localidad", value: cliente.localidad },
-                  { label: "Teléfono", value: cliente.telefono },
-                  { label: "Email", value: cliente.email },
-                  { label: "DNI/CUIT", value: cliente.dni },
-                  { label: "Fecha Alta", value: cliente.fechaAlta },
-                ].map((f) => (
-                  <div key={f.label}>
-                    <p className="font-['Geist:Regular',sans-serif] text-[#94a3b8] text-[12px]">{f.label}</p>
-                    <p className="font-['Geist:Medium',sans-serif] font-medium text-[#0f172a] text-[14px] mt-[2px]">{f.value}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Historial */}
-            <div className="bg-white p-[24px] rounded-[12px]" style={{ border: "1px solid #e2e8f0" }}>
-              <p className="font-['Geist:SemiBold',sans-serif] font-semibold text-[#0f172a] text-[16px] mb-[16px]">Historial de Ficheros / Pedidos</p>
-              {cliente.historial.length > 0 ? (
-                <>
-                  <table className="w-full">
-                    <thead>
-                      <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
-                        {["Fecha", "Vendedor", "Artículos", "Importe Total"].map((h) => (
-                          <th key={h} className="text-left font-['Geist:Medium',sans-serif] font-medium text-[#475569] text-[13px] py-[8px]">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {cliente.historial.map((row, i) => (
-                        <tr key={i} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                          <td className={`py-[14px] font-['Geist:Regular',sans-serif] text-[14px] ${row.isCurrent ? "text-[#0ea5e9] font-semibold" : "text-[#475569]"}`}>{row.fecha}</td>
-                          <td className="py-[14px] font-['Geist:Regular',sans-serif] text-[#475569] text-[14px]">{row.vendedor}</td>
-                          <td className={`py-[14px] font-['Geist:Regular',sans-serif] text-[14px] ${row.isCurrent ? "text-[#0f172a] font-semibold" : "text-[#475569]"}`}>{row.articulos}</td>
-                          <td className="py-[14px] font-['Geist:SemiBold',sans-serif] font-semibold text-[#0f172a] text-[14px] text-right">{row.importe}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {cliente.ficheroActual && (
-                    <div className="mt-[12px] flex gap-[16px] bg-[#f8fafc] p-[12px] rounded-[8px]">
-                      <div>
-                        <p className="font-['Geist:Regular',sans-serif] text-[#94a3b8] text-[11px] uppercase tracking-wide">VENTA TOTAL</p>
-                        <p className="font-['Geist:Bold',sans-serif] font-bold text-[#0f172a] text-[14px] mt-[2px]">{cliente.ficheroActual.costos.venta}</p>
-                      </div>
-                      <div>
-                        <p className="font-['Geist:Regular',sans-serif] text-[#94a3b8] text-[11px] uppercase tracking-wide">COSTOS TOTALES</p>
-                        <p className="font-['Geist:Bold',sans-serif] font-bold text-[#ef4444] text-[14px] mt-[2px]">{cliente.ficheroActual.costos.totalCostos}</p>
-                      </div>
-                      <div>
-                        <p className="font-['Geist:Regular',sans-serif] text-[#94a3b8] text-[11px] uppercase tracking-wide">MARGEN NETO</p>
-                        <p className="font-['Geist:Bold',sans-serif] font-bold text-[#0ea5e9] text-[14px] mt-[2px]">{cliente.ficheroActual.costos.margenNeto} <span className="text-[#475569] text-[12px]">{cliente.ficheroActual.costos.margenPct}</span></p>
-                      </div>
+        <div className={`${activeTab === "fichero" ? "grid grid-cols-[1fr_340px]" : ""} gap-[24px]`}>
+          {/* Left - solo en tab Fichero */}
+          {activeTab === "fichero" && (
+            <div className="flex flex-col gap-[24px]">
+              {/* Info de Contacto */}
+              <div className="bg-white p-[24px] rounded-[12px]" style={{ border: "1px solid #e2e8f0" }}>
+                <div className="flex items-center justify-between mb-[20px]">
+                  <p className="font-['Geist:SemiBold',sans-serif] font-semibold text-[#0f172a] text-[16px]">Información de Contacto</p>
+                  <span
+                    className="font-['Geist:SemiBold',sans-serif] font-semibold text-[12px] px-[10px] py-[4px] rounded-[6px]"
+                    style={estadoStyle[cliente.estado] ?? { bg: "#f1f5f9", color: "#64748b" }}
+                  >
+                    {cliente.estado}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-[16px]">
+                  {[
+                    { label: "Dirección", value: cliente.direccion },
+                    { label: "Localidad", value: cliente.localidad },
+                    { label: "Teléfono", value: cliente.telefono },
+                    { label: "Email", value: cliente.email },
+                    { label: "DNI/CUIT", value: cliente.dni },
+                    { label: "Fecha Alta", value: cliente.fechaAlta },
+                  ].map((f) => (
+                    <div key={f.label}>
+                      <p className="font-['Geist:Regular',sans-serif] text-[#94a3b8] text-[12px]">{f.label}</p>
+                      <p className="font-['Geist:Medium',sans-serif] font-medium text-[#0f172a] text-[14px] mt-[2px]">{f.value}</p>
                     </div>
-                  )}
-                </>
-              ) : (
+                  ))}
+                </div>
+              </div>
+
+              {/* Historial placeholder */}
+              <div className="bg-white p-[24px] rounded-[12px]" style={{ border: "1px solid #e2e8f0" }}>
+                <p className="font-['Geist:SemiBold',sans-serif] font-semibold text-[#0f172a] text-[16px] mb-[16px]">Historial de Ficheros / Pedidos</p>
                 <div className="py-[32px] flex flex-col items-center justify-center">
                   <svg fill="none" height="40" viewBox="0 0 40 40" width="40" className="mb-[12px]">
                     <rect x="4" y="6" width="32" height="28" rx="4" stroke="#cbd5e1" strokeWidth="2" />
@@ -446,12 +581,12 @@ export default function ClienteDetalle() {
                   <p className="font-['Geist:Medium',sans-serif] font-medium text-[#94a3b8] text-[14px]">Sin historial de pedidos</p>
                   <p className="font-['Geist:Regular',sans-serif] text-[#cbd5e1] text-[13px] mt-[4px]">Los ficheros y pedidos aparecerán aquí</p>
                 </div>
-              )}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Right: Tabs Fichero / Pagos */}
-          <div className="self-start">
+          <div className={activeTab === "pagos" ? "w-full" : "self-start"}>
             {/* Tabs */}
             <div className="bg-white rounded-t-[12px] flex" style={{ border: "1px solid #e2e8f0", borderBottom: "none" }}>
               <button
@@ -472,10 +607,10 @@ export default function ClienteDetalle() {
                     : "text-[#94a3b8] bg-[#f8fafc] hover:text-[#64748b]"
                 }`}
               >
-                Pagos
-                {!sinFichero && cliente.ficheroActual!.pagos.length > 0 && (
+                Cobros
+                {!sinFichero && tieneCobros && (
                   <span className="ml-[6px] inline-flex items-center justify-center size-[18px] rounded-full bg-[#0ea5e9] text-white text-[10px] font-bold">
-                    {cliente.ficheroActual!.pagos.length}
+                    {cliente.fichero!.cuotas.length}
                   </span>
                 )}
               </button>
@@ -507,9 +642,9 @@ export default function ClienteDetalle() {
                   <>
                     <div className="flex flex-col gap-[8px] mb-[20px]">
                       {[
-                        { label: "Fecha de Pedido", value: cliente.ficheroActual!.fecha },
-                        { label: "Vendedor", value: cliente.ficheroActual!.vendedor },
-                        { label: "Comisión Venta", value: cliente.ficheroActual!.comision, green: true },
+                        { label: "Fecha de Pedido", value: cliente.fichero!.fecha },
+                        { label: "Vendedor", value: cliente.fichero!.vendedor },
+                        { label: "Comisión Venta", value: cliente.fichero!.comision, green: true },
                       ].map((row) => (
                         <div key={row.label} className="flex items-center justify-between">
                           <p className="font-['Geist:Regular',sans-serif] text-[#475569] text-[13px]">{row.label}</p>
@@ -519,7 +654,7 @@ export default function ClienteDetalle() {
                     </div>
                     <p className="font-['Geist:SemiBold',sans-serif] font-semibold text-[#0f172a] text-[13px] mb-[12px]">Artículos</p>
                     <div className="flex flex-col gap-[10px] mb-[20px]">
-                      {cliente.ficheroActual!.items.map((item, i) => (
+                      {cliente.fichero!.items.map((item, i) => (
                         <div key={i} className="flex items-start justify-between">
                           <div>
                             <p className="font-['Geist:Medium',sans-serif] font-medium text-[#0f172a] text-[13px]">{item.desc}</p>
@@ -531,17 +666,17 @@ export default function ClienteDetalle() {
                     </div>
                     <div className="flex items-center justify-between py-[12px]" style={{ borderTop: "1px solid #e2e8f0" }}>
                       <p className="font-['Geist:Bold',sans-serif] font-bold text-[#0f172a] text-[15px]">Importe Total</p>
-                      <p className="font-['Geist:Bold',sans-serif] font-bold text-[#0ea5e9] text-[22px]">{cliente.ficheroActual!.total}</p>
+                      <p className="font-['Geist:Bold',sans-serif] font-bold text-[#0ea5e9] text-[22px]">{cliente.fichero!.total}</p>
                     </div>
                     <div className="bg-[#f8fafc] p-[14px] rounded-[8px] mt-[8px]">
                       <p className="font-['Geist:SemiBold',sans-serif] font-semibold text-[#475569] text-[11px] uppercase tracking-wide mb-[10px]">DESGLOSE DE COSTOS DE OBRA</p>
                       {[
-                        { label: "Proveedor Piscina", value: cliente.ficheroActual!.costos.proveedor, color: "#0f172a" },
-                        { label: "Costo Piscina", value: cliente.ficheroActual!.costos.costoPiscina, color: "#ef4444" },
-                        { label: "Instalación", value: cliente.ficheroActual!.costos.instalacion, color: "#ef4444" },
-                        { label: "Equipo de Filtrado", value: cliente.ficheroActual!.costos.equipoFiltrado, color: "#ef4444" },
-                        { label: "Mano de Obra Vereda", value: cliente.ficheroActual!.costos.manoObraVereda, color: cliente.ficheroActual!.costos.manoObraVereda === "No aplica" ? "#94a3b8" : "#ef4444" },
-                        { label: "Comisión Vendedor", value: cliente.ficheroActual!.costos.comision, color: "#ef4444" },
+                        { label: "Proveedor Piscina", value: cliente.fichero!.costos.proveedor, color: "#0f172a" },
+                        { label: "Costo Piscina", value: cliente.fichero!.costos.costoPiscina, color: "#ef4444" },
+                        { label: "Instalación", value: cliente.fichero!.costos.instalacion, color: "#ef4444" },
+                        { label: "Equipo de Filtrado", value: cliente.fichero!.costos.equipoFiltrado, color: "#ef4444" },
+                        { label: "Mano de Obra Vereda", value: cliente.fichero!.costos.manoObraVereda, color: cliente.fichero!.costos.manoObraVereda === "No aplica" ? "#94a3b8" : "#ef4444" },
+                        { label: "Comisión Vendedor", value: cliente.fichero!.costos.comision, color: "#ef4444" },
                       ].map((r) => (
                         <div key={r.label} className="flex items-center justify-between mb-[6px]">
                           <p className="font-['Geist:Regular',sans-serif] text-[#475569] text-[13px]">{r.label}</p>
@@ -550,20 +685,20 @@ export default function ClienteDetalle() {
                       ))}
                       <div className="flex items-center justify-between mb-[6px] pt-[6px]" style={{ borderTop: "1px solid #e2e8f0" }}>
                         <p className="font-['Geist:SemiBold',sans-serif] font-semibold text-[#0f172a] text-[13px]">Total Costos</p>
-                        <p className="font-['Geist:Bold',sans-serif] font-bold text-[#ef4444] text-[14px]">{cliente.ficheroActual!.costos.totalCostos}</p>
+                        <p className="font-['Geist:Bold',sans-serif] font-bold text-[#ef4444] text-[14px]">{cliente.fichero!.costos.totalCostos}</p>
                       </div>
                       <div className="flex items-center justify-between pt-[8px]" style={{ borderTop: "1px solid #e2e8f0" }}>
                         <p className="font-['Geist:SemiBold',sans-serif] font-semibold text-[#0f172a] text-[13px]">Margen Neto</p>
                         <div className="flex items-center gap-[8px]">
-                          <p className="font-['Geist:Bold',sans-serif] font-bold text-[#10b981] text-[15px]">{cliente.ficheroActual!.costos.margenNeto}</p>
-                          <span className="bg-[#d1fae5] text-[#10b981] font-['Geist:SemiBold',sans-serif] font-semibold text-[11px] px-[6px] py-[2px] rounded-[4px]">{cliente.ficheroActual!.costos.margenPct}</span>
+                          <p className="font-['Geist:Bold',sans-serif] font-bold text-[#10b981] text-[15px]">{cliente.fichero!.costos.margenNeto}</p>
+                          <span className="bg-[#d1fae5] text-[#10b981] font-['Geist:SemiBold',sans-serif] font-semibold text-[11px] px-[6px] py-[2px] rounded-[4px]">{cliente.fichero!.costos.margenPct}</span>
                         </div>
                       </div>
                     </div>
                   </>
                 )
               ) : (
-                /* ---- TAB PAGOS ---- */
+                /* ---- TAB COBROS (VISTA UNIFICADA) ---- */
                 sinFichero ? (
                   <div className="py-[32px] flex flex-col items-center justify-center">
                     <svg fill="none" height="40" viewBox="0 0 40 40" width="40" className="mb-[12px]">
@@ -571,29 +706,28 @@ export default function ClienteDetalle() {
                       <path d="M4 18H36" stroke="#cbd5e1" strokeWidth="2" />
                     </svg>
                     <p className="font-['Geist:Medium',sans-serif] font-medium text-[#94a3b8] text-[14px]">Sin fichero activo</p>
-                    <p className="font-['Geist:Regular',sans-serif] text-[#cbd5e1] text-[13px] mt-[4px]">Creá un fichero primero para gestionar pagos</p>
+                    <p className="font-['Geist:Regular',sans-serif] text-[#cbd5e1] text-[13px] mt-[4px]">Creá un fichero primero para gestionar cobros</p>
                   </div>
                 ) : (
                   <div className="flex flex-col gap-[16px]">
-                    {/* Resumen de pagos */}
+                    {/* Resumen */}
                     <div className="bg-[#f8fafc] p-[16px] rounded-[8px]">
                       <div className="grid grid-cols-3 gap-[12px] mb-[12px]">
                         <div>
-                          <p className="font-['Geist:Regular',sans-serif] text-[#94a3b8] text-[11px] uppercase tracking-wide">Total Venta</p>
-                          <p className="font-['Geist:Bold',sans-serif] font-bold text-[#0f172a] text-[16px] mt-[2px]">{cliente.ficheroActual!.total}</p>
+                          <p className="font-['Geist:Regular',sans-serif] text-[#94a3b8] text-[11px] uppercase tracking-wide">Total Costo</p>
+                          <p className="font-['Geist:Bold',sans-serif] font-bold text-[#0f172a] text-[16px] mt-[2px]">{formatCurrency(totalCostoCobros)}</p>
                         </div>
                         <div>
-                          <p className="font-['Geist:Regular',sans-serif] text-[#94a3b8] text-[11px] uppercase tracking-wide">Pagado</p>
-                          <p className="font-['Geist:Bold',sans-serif] font-bold text-[#10b981] text-[16px] mt-[2px]">{formatCurrency(totalPagado)}</p>
+                          <p className="font-['Geist:Regular',sans-serif] text-[#94a3b8] text-[11px] uppercase tracking-wide">Ingresos</p>
+                          <p className="font-['Geist:Bold',sans-serif] font-bold text-[#10b981] text-[16px] mt-[2px]">{formatCurrency(totalIngresos)}</p>
                         </div>
                         <div>
-                          <p className="font-['Geist:Regular',sans-serif] text-[#94a3b8] text-[11px] uppercase tracking-wide">Pendiente</p>
+                          <p className="font-['Geist:Regular',sans-serif] text-[#94a3b8] text-[11px] uppercase tracking-wide">Saldo Pendiente</p>
                           <p className={`font-['Geist:Bold',sans-serif] font-bold text-[16px] mt-[2px] ${estaPagado ? "text-[#10b981]" : "text-[#ef4444]"}`}>
-                            {estaPagado ? "$0" : formatCurrency(saldoPendiente)}
+                            {estaPagado ? "$0" : formatCurrency(saldoPendienteTotal)}
                           </p>
                         </div>
                       </div>
-                      {/* Barra de progreso */}
                       <div className="w-full h-[8px] bg-[#e2e8f0] rounded-full overflow-hidden">
                         <div
                           className="h-full rounded-full transition-all duration-500"
@@ -611,71 +745,122 @@ export default function ClienteDetalle() {
                       </div>
                     </div>
 
-                    {/* Botón Registrar Pago */}
-                    {!estaPagado && (
+                    {/* Botones de acción */}
+                    <div className="flex items-center gap-[10px]">
+                      {!tienePagoInicial ? (
+                        <button
+                          onClick={() => {
+                            setPagoInicialForm({ monto: "", metodo: "Transferencia", comprobante: "", observaciones: "" });
+                            setPagoInicialErrors({});
+                            setShowPagoInicialModal(true);
+                          }}
+                          className="flex items-center gap-[6px] bg-[#10b981] hover:bg-[#059669] transition-colors text-white font-['Geist:SemiBold',sans-serif] font-semibold text-[12px] px-[14px] py-[8px] rounded-[8px]"
+                        >
+                          <svg fill="none" height="12" viewBox="0 0 16 16" width="12"><path d="M2 8h12M8 2v12" stroke="white" strokeLinecap="round" strokeWidth="2" /></svg>
+                          Pago Inicial
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setPagoInicialForm({ monto: String(pagoInicialMonto), metodo: "Transferencia", comprobante: "", observaciones: "" });
+                            setPagoInicialErrors({});
+                            setShowPagoInicialModal(true);
+                          }}
+                          className="flex items-center gap-[6px] bg-[#d1fae5] hover:bg-[#a7f3d0] transition-colors text-[#065f46] font-['Geist:SemiBold',sans-serif] font-semibold text-[12px] px-[14px] py-[8px] rounded-[8px]"
+                          style={{ border: "1px solid #6ee7b7" }}
+                        >
+                          <svg fill="none" height="12" viewBox="0 0 16 16" width="12"><path d="M2 8h12" stroke="#065f46" strokeLinecap="round" strokeWidth="2" /></svg>
+                          Pago Inicial: {formatCurrency(pagoInicialMonto)}
+                        </button>
+                      )}
                       <button
-                        onClick={() => handleOpenPagoModal()}
-                        className="w-full flex items-center justify-center gap-[8px] bg-[#0ea5e9] hover:bg-[#0284c7] transition-colors text-white font-['Geist:SemiBold',sans-serif] font-semibold text-[13px] px-[14px] py-[10px] rounded-[8px]"
+                        onClick={() => setShowGenerarPlanModal(true)}
+                        className="flex items-center gap-[6px] bg-[#0ea5e9] hover:bg-[#0284c7] transition-colors text-white font-['Geist:SemiBold',sans-serif] font-semibold text-[12px] px-[14px] py-[8px] rounded-[8px]"
                       >
-                        <svg fill="none" height="14" viewBox="0 0 16 16" width="14">
-                          <path d="M8 3.3328V12.6672M3.3328 8H12.6672" stroke="white" strokeLinecap="round" strokeWidth="2" />
-                        </svg>
-                        Registrar Pago
+                        <svg fill="none" height="12" viewBox="0 0 16 16" width="12"><path d="M2 3h12M2 8h12M2 13h8" stroke="white" strokeLinecap="round" strokeWidth="2" /></svg>
+                        {tieneCobros ? "Regenerar Plan" : "Generar Plan"}
                       </button>
-                    )}
+                      <button
+                        onClick={() => setShowAgregarCargoModal(true)}
+                        className="flex items-center gap-[6px] bg-white hover:bg-[#f1f5f9] transition-colors text-[#0f172a] font-['Geist:SemiBold',sans-serif] font-semibold text-[12px] px-[14px] py-[8px] rounded-[8px]"
+                        style={{ border: "1px solid #e2e8f0" }}
+                      >
+                        <svg fill="none" height="12" viewBox="0 0 16 16" width="12"><path d="M8 3.3328V12.6672M3.3328 8H12.6672" stroke="#0f172a" strokeLinecap="round" strokeWidth="2" /></svg>
+                        Agregar Cargo
+                      </button>
+                    </div>
 
-                    {/* Tabla de pagos */}
-                    {cliente.ficheroActual!.pagos.length > 0 ? (
-                      <div>
-                        <p className="font-['Geist:SemiBold',sans-serif] font-semibold text-[#0f172a] text-[13px] mb-[10px]">Pagos registrados</p>
-                        <div className="flex flex-col gap-[6px]">
-                          {cliente.ficheroActual!.pagos.map((pago, i) => (
-                            <div
-                              key={pago.id}
-                              className="flex items-center gap-[10px] p-[12px] rounded-[8px] bg-[#f8fafc] group hover:bg-[#f1f5f9] transition-colors"
-                            >
-                              <div className="size-[32px] rounded-[6px] flex items-center justify-center text-white text-[11px] font-bold shrink-0" style={{ backgroundColor: metodoColor[pago.metodo] ?? "#64748b" }}>
-                                {i + 1}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-[8px]">
-                                  <p className="font-['Geist:Medium',sans-serif] font-medium text-[#0f172a] text-[13px]">{formatCurrency(pago.monto)}</p>
-                                  <span className="font-['Geist:Regular',sans-serif] text-[11px] px-[6px] py-[1px] rounded-[4px]" style={{ backgroundColor: `${metodoColor[pago.metodo]}20`, color: metodoColor[pago.metodo] }}>
-                                    {pago.metodo}
-                                  </span>
-                                </div>
-                                <p className="font-['Geist:Regular',sans-serif] text-[#94a3b8] text-[12px] mt-[2px]">{pago.fecha}{pago.comprobante ? ` · ${pago.comprobante}` : ""}{pago.observaciones ? ` · ${pago.observaciones}` : ""}</p>
-                              </div>
-                              <div className="flex items-center gap-[4px] opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button
-                                  onClick={() => handleOpenPagoModal(pago)}
-                                  className="size-[28px] flex items-center justify-center rounded-[6px] hover:bg-white transition-colors"
-                                >
-                                  <svg fill="none" height="14" viewBox="0 0 16 16" width="14">
-                                    <path d="M11.5 1.5L14.5 4.5L5 14H2V11L11.5 1.5Z" stroke="#64748b" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" />
-                                  </svg>
-                                </button>
-                                <button
-                                  onClick={() => handleRemovePago(pago.id)}
-                                  className="size-[28px] flex items-center justify-center rounded-[6px] hover:bg-[#fee2e2] transition-colors"
-                                >
-                                  <svg fill="none" height="14" viewBox="0 0 16 16" width="14">
-                                    <path d="M2 4H14M5 4V2H11V4M6 7V12M10 7V12M3 4L4 14H12L13 4" stroke="#ef4444" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" />
-                                  </svg>
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
+                    {/* Tabla unificada */}
+                    {tieneCobros ? (
+                      <div className="rounded-[10px] overflow-hidden" style={{ border: "1px solid #e2e8f0" }}>
+                        <table className="w-full">
+                          <thead>
+                            <tr className="bg-[#f8fafc]" style={{ borderBottom: "1px solid #e2e8f0" }}>
+                              {["Fecha", "Costo", "Ingreso", "Saldo Pend."].map((h) => (
+                                <th key={h} className="text-left font-['Geist:Medium',sans-serif] font-medium text-[#475569] text-[11px] uppercase tracking-wide px-[14px] py-[10px]">{h}</th>
+                              ))}
+                              <th className="w-[160px]"></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {cliente.fichero!.cuotas.map((cuota) => {
+                              const saldo = cuota.montoPlanificado - cuota.montoPagado;
+                              return (
+                                <tr key={cuota.id} className="group hover:bg-[#f8fafc] transition-colors" style={{ borderBottom: "1px solid #f1f5f9" }}>
+                                  <td className="px-[14px] py-[10px]">
+                                    <p className="font-['Geist:Regular',sans-serif] text-[#475569] text-[12px]">{cuota.fechaVencimiento}</p>
+                                    {cuota.descripcion && <p className="font-['Geist:Medium',sans-serif] font-medium text-[#0f172a] text-[12px] mt-[1px]">{cuota.descripcion}</p>}
+                                  </td>
+                                  <td className="px-[14px] py-[10px] font-['Geist:SemiBold',sans-serif] font-semibold text-[#0f172a] text-[13px]">{formatCurrency(cuota.montoPlanificado)}</td>
+                                  <td className="px-[14px] py-[10px]">
+                                    <span className={`font-['Geist:SemiBold',sans-serif] font-semibold text-[13px] ${cuota.montoPagado > 0 ? "text-[#10b981]" : "text-[#94a3b8]"}`}>
+                                      {cuota.montoPagado > 0 ? formatCurrency(cuota.montoPagado) : "—"}
+                                    </span>
+                                  </td>
+                                  <td className="px-[14px] py-[10px]">
+                                    <span className={`font-['Geist:Bold',sans-serif] font-bold text-[13px] ${saldo <= 0 ? "text-[#10b981]" : "text-[#ef4444]"}`}>
+                                      {saldo <= 0 ? "$0" : formatCurrency(saldo)}
+                                    </span>
+                                  </td>
+                                  <td className="px-[14px] py-[10px]">
+                                    <div className="flex items-center gap-[4px] opacity-0 group-hover:opacity-100 transition-opacity justify-end">
+                                      {saldo > 0 && (
+                                        <button
+                                          onClick={() => handleOpenIngresarCobro(cuota)}
+                                          className="font-['Geist:SemiBold',sans-serif] font-semibold text-[10px] text-white bg-[#0ea5e9] hover:bg-[#0284c7] transition-colors px-[8px] py-[4px] rounded-[6px]"
+                                        >
+                                          Ingresar Cobro
+                                        </button>
+                                      )}
+                                      <button onClick={() => handleOpenEditarCuota(cuota)} className="size-[24px] flex items-center justify-center rounded-[6px] hover:bg-[#f1f5f9] transition-colors">
+                                        <svg fill="none" height="11" viewBox="0 0 16 16" width="11"><path d="M11.5 1.5L14.5 4.5L5 14H2V11L11.5 1.5Z" stroke="#64748b" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" /></svg>
+                                      </button>
+                                      <button onClick={() => { setEditingCuota(cuota); setShowEliminarCuotaConfirm(true); }} className="size-[24px] flex items-center justify-center rounded-[6px] hover:bg-[#fee2e2] transition-colors">
+                                        <svg fill="none" height="11" viewBox="0 0 16 16" width="11"><path d="M2 4H14M5 4V2H11V4M6 7V12M10 7V12M3 4L4 14H12L13 4" stroke="#ef4444" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" /></svg>
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                          <tfoot>
+                            <tr className="bg-[#f8fafc]" style={{ borderTop: "2px solid #e2e8f0" }}>
+                              <td className="px-[14px] py-[12px] font-['Geist:SemiBold',sans-serif] font-semibold text-[#0f172a] text-[12px] uppercase">Totales</td>
+                              <td className="px-[14px] py-[12px] font-['Geist:Bold',sans-serif] font-bold text-[#0f172a] text-[14px]">{formatCurrency(totalCostoCobros)}</td>
+                              <td className="px-[14px] py-[12px] font-['Geist:Bold',sans-serif] font-bold text-[#10b981] text-[14px]">{formatCurrency(totalIngresos)}</td>
+                              <td className="px-[14px] py-[12px] font-['Geist:Bold',sans-serif] font-bold text-[14px]" style={{ color: estaPagado ? "#10b981" : "#ef4444" }}>
+                                {estaPagado ? "SALDO CANCELADO" : formatCurrency(saldoPendienteTotal)}
+                              </td>
+                              <td></td>
+                            </tr>
+                          </tfoot>
+                        </table>
                       </div>
                     ) : (
                       <div className="py-[24px] flex flex-col items-center justify-center">
-                        <svg fill="none" height="36" viewBox="0 0 40 40" width="36" className="mb-[10px]">
-                          <rect x="4" y="10" width="32" height="20" rx="4" stroke="#cbd5e1" strokeWidth="2" />
-                          <path d="M4 18H36" stroke="#cbd5e1" strokeWidth="2" />
-                        </svg>
-                        <p className="font-['Geist:Medium',sans-serif] font-medium text-[#94a3b8] text-[13px]">Sin pagos registrados</p>
-                        <p className="font-['Geist:Regular',sans-serif] text-[#cbd5e1] text-[12px] mt-[2px]">Registrá el primer pago del cliente</p>
+                        <p className="font-['Geist:Medium',sans-serif] font-medium text-[#94a3b8] text-[13px]">Sin cobros registrados</p>
+                        <p className="font-['Geist:Regular',sans-serif] text-[#cbd5e1] text-[12px] mt-[2px]">Generá un plan o agregá un cargo para comenzar</p>
                       </div>
                     )}
                   </div>
@@ -686,6 +871,8 @@ export default function ClienteDetalle() {
         </div>
       </div>
 
+      {/* ==================== MODALES ==================== */}
+
       {/* Modal Nuevo Fichero */}
       {showFicheroModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -694,9 +881,7 @@ export default function ClienteDetalle() {
             <div className="flex items-center justify-between px-[24px] py-[20px]" style={{ borderBottom: "1px solid #e2e8f0" }}>
               <p className="font-['Geist:Bold',sans-serif] font-bold text-[#0f172a] text-[18px]">Nuevo Fichero</p>
               <button onClick={handleCloseFicheroModal} className="flex items-center justify-center size-[32px] rounded-[8px] hover:bg-[#f1f5f9] transition-colors">
-                <svg fill="none" height="16" viewBox="0 0 16 16" width="16">
-                  <path d="M12 4L4 12M4 4L12 12" stroke="#64748b" strokeLinecap="round" strokeWidth="2" />
-                </svg>
+                <svg fill="none" height="16" viewBox="0 0 16 16" width="16"><path d="M12 4L4 12M4 4L12 12" stroke="#64748b" strokeLinecap="round" strokeWidth="2" /></svg>
               </button>
             </div>
             <div className="px-[24px] py-[20px] flex flex-col gap-[20px]">
@@ -818,60 +1003,312 @@ export default function ClienteDetalle() {
         </div>
       )}
 
-      {/* Modal Registrar Pago */}
-      {showPagoModal && (
+      {/* Modal Generar Plan */}
+      {showGenerarPlanModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/40" onClick={handleClosePagoModal} />
-          <div className="relative bg-white rounded-[16px] w-[480px] max-h-[90vh] overflow-y-auto" style={{ border: "1px solid #e2e8f0" }}>
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowGenerarPlanModal(false)} />
+          <div className="relative bg-white rounded-[16px] w-[420px]" style={{ border: "1px solid #e2e8f0" }}>
             <div className="flex items-center justify-between px-[24px] py-[20px]" style={{ borderBottom: "1px solid #e2e8f0" }}>
-              <p className="font-['Geist:Bold',sans-serif] font-bold text-[#0f172a] text-[18px]">{editingPago ? "Editar Pago" : "Registrar Pago"}</p>
-              <button onClick={handleClosePagoModal} className="flex items-center justify-center size-[32px] rounded-[8px] hover:bg-[#f1f5f9] transition-colors">
+              <p className="font-['Geist:Bold',sans-serif] font-bold text-[#0f172a] text-[18px]">Generar Plan de Cuotas</p>
+              <button onClick={() => setShowGenerarPlanModal(false)} className="flex items-center justify-center size-[32px] rounded-[8px] hover:bg-[#f1f5f9] transition-colors">
                 <svg fill="none" height="16" viewBox="0 0 16 16" width="16"><path d="M12 4L4 12M4 4L12 12" stroke="#64748b" strokeLinecap="round" strokeWidth="2" /></svg>
               </button>
             </div>
             <div className="px-[24px] py-[20px] flex flex-col gap-[16px]">
+              <div>
+                <label className="font-['Geist:Medium',sans-serif] font-medium text-[#475569] text-[13px] mb-[6px] block">Cantidad de Cuotas</label>
+                <select
+                  value={cantCuotas}
+                  onChange={(e) => setCantCuotas(Number(e.target.value))}
+                  className="w-full font-['Geist:Regular',sans-serif] text-[14px] text-[#0f172a] px-[12px] py-[9px] rounded-[8px] outline-none border border-[#e2e8f0] focus:border-[#0ea5e9] bg-white"
+                >
+                  {[1,2,3,4,5,6,7,8,9,10,11,12].map((n) => <option key={n} value={n}>{n} cuota{n > 1 ? "s" : ""}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="font-['Geist:Medium',sans-serif] font-medium text-[#475569] text-[13px] mb-[6px] block">Fecha Primer Vencimiento</label>
+                <input
+                  type="text"
+                  value={fechaPrimerVto}
+                  onChange={(e) => setFechaPrimerVto(e.target.value)}
+                  placeholder="dd/mes/aaaa"
+                  className="w-full font-['Geist:Regular',sans-serif] text-[14px] text-[#0f172a] px-[12px] py-[9px] rounded-[8px] outline-none border border-[#e2e8f0] focus:border-[#0ea5e9] transition-colors bg-white"
+                />
+              </div>
+              {cliente?.fichero && (
+                <div className="bg-[#f8fafc] p-[12px] rounded-[8px]">
+                  <p className="font-['Geist:Regular',sans-serif] text-[#94a3b8] text-[11px] uppercase tracking-wide">Vista previa</p>
+                  {tienePagoInicial && (
+                    <p className="font-['Geist:Regular',sans-serif] text-[#94a3b8] text-[12px] mt-[2px]">
+                      Total: {formatCurrency(ficheroTotal)} − Pago Inicial: {formatCurrency(pagoInicialMonto)} = Saldo: {formatCurrency(saldoParaCuotas)}
+                    </p>
+                  )}
+                  <p className="font-['Geist:SemiBold',sans-serif] font-semibold text-[#0f172a] text-[13px] mt-[4px]">
+                    {cantCuotas} cuota{cantCuotas > 1 ? "s" : ""} de {formatCurrency(Math.floor(saldoParaCuotas / cantCuotas))}
+                    {cantCuotas > 1 && (
+                      <span className="text-[#94a3b8] text-[12px]"> (última: {formatCurrency(saldoParaCuotas - Math.floor(saldoParaCuotas / cantCuotas) * (cantCuotas - 1))})</span>
+                    )}
+                  </p>
+                  {tieneCobros && (
+                    <p className="font-['Geist:Medium',sans-serif] font-medium text-[#f59e0b] text-[12px] mt-[6px]">
+                      Esto reemplazará las cuotas actuales (no afecta el pago inicial)
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="flex items-center justify-end gap-[12px] px-[24px] py-[20px]" style={{ borderTop: "1px solid #e2e8f0" }}>
+              <button onClick={() => setShowGenerarPlanModal(false)} className="font-['Geist:Medium',sans-serif] font-medium text-[14px] text-[#475569] px-[16px] py-[10px] rounded-[8px] hover:bg-[#f1f5f9] transition-colors">Cancelar</button>
+              <button onClick={handleGenerarPlan} className="font-['Geist:SemiBold',sans-serif] font-semibold text-[14px] text-white bg-[#0ea5e9] hover:bg-[#0284c7] transition-colors px-[16px] py-[10px] rounded-[8px]">Generar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Agregar Cargo */}
+      {showAgregarCargoModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowAgregarCargoModal(false)} />
+          <div className="relative bg-white rounded-[16px] w-[420px]" style={{ border: "1px solid #e2e8f0" }}>
+            <div className="flex items-center justify-between px-[24px] py-[20px]" style={{ borderBottom: "1px solid #e2e8f0" }}>
+              <p className="font-['Geist:Bold',sans-serif] font-bold text-[#0f172a] text-[18px]">Agregar Cargo</p>
+              <button onClick={() => setShowAgregarCargoModal(false)} className="flex items-center justify-center size-[32px] rounded-[8px] hover:bg-[#f1f5f9] transition-colors">
+                <svg fill="none" height="16" viewBox="0 0 16 16" width="16"><path d="M12 4L4 12M4 4L12 12" stroke="#64748b" strokeLinecap="round" strokeWidth="2" /></svg>
+              </button>
+            </div>
+            <div className="px-[24px] py-[20px] flex flex-col gap-[16px]">
+              <div>
+                <label className="font-['Geist:Medium',sans-serif] font-medium text-[#475569] text-[13px] mb-[6px] block">Fecha *</label>
+                <input type="text" value={cargoForm.fecha} onChange={(e) => setCargoForm((p) => ({ ...p, fecha: e.target.value }))} placeholder="dd/mm/aaaa" className={cobroInputClass("cargoFecha")} style={{ border: `1px solid ${cargoErrors.fecha ? "#ef4444" : "#e2e8f0"}` }} />
+                {cargoErrors.fecha && <p className="text-[#ef4444] text-[12px] mt-[4px]">{cargoErrors.fecha}</p>}
+              </div>
+              <div>
+                <label className="font-['Geist:Medium',sans-serif] font-medium text-[#475569] text-[13px] mb-[6px] block">Monto *</label>
+                <input type="text" value={cargoForm.monto} onChange={(e) => setCargoForm((p) => ({ ...p, monto: e.target.value }))} placeholder="$ 0" className={cobroInputClass("cargoMonto")} style={{ border: `1px solid ${cargoErrors.monto ? "#ef4444" : "#e2e8f0"}` }} />
+                {cargoErrors.monto && <p className="text-[#ef4444] text-[12px] mt-[4px]">{cargoErrors.monto}</p>}
+              </div>
+              <div>
+                <label className="font-['Geist:Medium',sans-serif] font-medium text-[#475569] text-[13px] mb-[6px] block">Descripción (opcional)</label>
+                <input type="text" value={cargoForm.descripcion} onChange={(e) => setCargoForm((p) => ({ ...p, descripcion: e.target.value }))} placeholder="Ej: Seña inicial, Kit de luces..." className="w-full font-['Geist:Regular',sans-serif] text-[14px] text-[#0f172a] px-[12px] py-[9px] rounded-[8px] outline-none border border-[#e2e8f0] focus:border-[#0ea5e9] transition-colors bg-white" />
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-[12px] px-[24px] py-[20px]" style={{ borderTop: "1px solid #e2e8f0" }}>
+              <button onClick={() => setShowAgregarCargoModal(false)} className="font-['Geist:Medium',sans-serif] font-medium text-[14px] text-[#475569] px-[16px] py-[10px] rounded-[8px] hover:bg-[#f1f5f9] transition-colors">Cancelar</button>
+              <button onClick={handleAgregarCargo} className="font-['Geist:SemiBold',sans-serif] font-semibold text-[14px] text-white bg-[#0ea5e9] hover:bg-[#0284c7] transition-colors px-[16px] py-[10px] rounded-[8px]">Agregar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Ingresar Cobro */}
+      {showIngresarCobroModal && editingCuota && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => { setShowIngresarCobroModal(false); setEditingCuota(null); }} />
+          <div className="relative bg-white rounded-[16px] w-[480px] max-h-[90vh] overflow-y-auto" style={{ border: "1px solid #e2e8f0" }}>
+            <div className="flex items-center justify-between px-[24px] py-[20px]" style={{ borderBottom: "1px solid #e2e8f0" }}>
+              <p className="font-['Geist:Bold',sans-serif] font-bold text-[#0f172a] text-[18px]">Ingresar Cobro</p>
+              <button onClick={() => { setShowIngresarCobroModal(false); setEditingCuota(null); }} className="flex items-center justify-center size-[32px] rounded-[8px] hover:bg-[#f1f5f9] transition-colors">
+                <svg fill="none" height="16" viewBox="0 0 16 16" width="16"><path d="M12 4L4 12M4 4L12 12" stroke="#64748b" strokeLinecap="round" strokeWidth="2" /></svg>
+              </button>
+            </div>
+            <div className="px-[24px] py-[20px] flex flex-col gap-[16px]">
+              <div className="bg-[#f8fafc] p-[12px] rounded-[8px]">
+                <div className="flex items-center justify-between">
+                  <p className="font-['Geist:Regular',sans-serif] text-[#475569] text-[12px]">Saldo de la cuota</p>
+                  <p className="font-['Geist:Bold',sans-serif] font-bold text-[#0f172a] text-[14px]">{formatCurrency(editingCuota.montoPlanificado - editingCuota.montoPagado)}</p>
+                </div>
+                {editingCuota.descripcion && (
+                  <p className="font-['Geist:Medium',sans-serif] font-medium text-[#0f172a] text-[12px] mt-[4px]">{editingCuota.descripcion}</p>
+                )}
+              </div>
               <div className="grid grid-cols-2 gap-[12px]">
                 <div>
                   <label className="font-['Geist:Medium',sans-serif] font-medium text-[#475569] text-[13px] mb-[6px] block">Fecha de Pago *</label>
-                  <input type="text" value={pagoForm.fecha} onChange={(e) => handlePagoChange("fecha", e.target.value)} placeholder="dd/mm/aaaa" className={pagoInputClass("fecha")} style={{ border: `1px solid ${pagoErrors.fecha ? "#ef4444" : "#e2e8f0"}` }} />
-                  {pagoErrors.fecha && <p className="text-[#ef4444] text-[12px] mt-[4px]">{pagoErrors.fecha}</p>}
+                  <input type="text" value={cobroForm.fecha} onChange={(e) => setCobroForm((p) => ({ ...p, fecha: e.target.value }))} placeholder="dd/mm/aaaa" className={cobroInputClass("cobroFecha")} style={{ border: `1px solid ${cobroErrors.fecha ? "#ef4444" : "#e2e8f0"}` }} />
+                  {cobroErrors.fecha && <p className="text-[#ef4444] text-[12px] mt-[4px]">{cobroErrors.fecha}</p>}
                 </div>
                 <div>
                   <label className="font-['Geist:Medium',sans-serif] font-medium text-[#475569] text-[13px] mb-[6px] block">Monto *</label>
-                  <input type="text" value={pagoForm.monto} onChange={(e) => handlePagoChange("monto", e.target.value)} placeholder="$ 0" className={pagoInputClass("monto")} style={{ border: `1px solid ${pagoErrors.monto ? "#ef4444" : "#e2e8f0"}` }} />
-                  {pagoErrors.monto && <p className="text-[#ef4444] text-[12px] mt-[4px]">{pagoErrors.monto}</p>}
+                  <input type="text" value={cobroForm.monto} onChange={(e) => setCobroForm((p) => ({ ...p, monto: e.target.value }))} placeholder="$ 0" className={cobroInputClass("cobroMonto")} style={{ border: `1px solid ${cobroErrors.monto ? "#ef4444" : "#e2e8f0"}` }} />
+                  {cobroErrors.monto && <p className="text-[#ef4444] text-[12px] mt-[4px]">{cobroErrors.monto}</p>}
                 </div>
               </div>
               <div>
                 <label className="font-['Geist:Medium',sans-serif] font-medium text-[#475569] text-[13px] mb-[6px] block">Método de Pago *</label>
-                <select value={pagoForm.metodo} onChange={(e) => handlePagoChange("metodo", e.target.value)} className={pagoInputClass("metodo")} style={{ border: `1px solid ${pagoErrors.metodo ? "#ef4444" : "#e2e8f0"}` }}>
+                <select value={cobroForm.metodo} onChange={(e) => setCobroForm((p) => ({ ...p, metodo: e.target.value }))} className={cobroInputClass("cobroMetodo")} style={{ border: `1px solid ${cobroErrors.metodo ? "#ef4444" : "#e2e8f0"}` }}>
                   {metodosPago.map((m) => <option key={m} value={m}>{m}</option>)}
                 </select>
-                {pagoErrors.metodo && <p className="text-[#ef4444] text-[12px] mt-[4px]">{pagoErrors.metodo}</p>}
+                {cobroErrors.metodo && <p className="text-[#ef4444] text-[12px] mt-[4px]">{cobroErrors.metodo}</p>}
               </div>
               <div>
                 <label className="font-['Geist:Medium',sans-serif] font-medium text-[#475569] text-[13px] mb-[6px] block">Nro. Comprobante (opcional)</label>
-                <input type="text" value={pagoForm.comprobante} onChange={(e) => handlePagoChange("comprobante", e.target.value)} placeholder="Ej: TR-12345" className="w-full font-['Geist:Regular',sans-serif] text-[14px] text-[#0f172a] px-[12px] py-[9px] rounded-[8px] outline-none border border-[#e2e8f0] focus:border-[#0ea5e9] transition-colors bg-white" />
+                <input type="text" value={cobroForm.comprobante} onChange={(e) => setCobroForm((p) => ({ ...p, comprobante: e.target.value }))} placeholder="Ej: TR-12345" className="w-full font-['Geist:Regular',sans-serif] text-[14px] text-[#0f172a] px-[12px] py-[9px] rounded-[8px] outline-none border border-[#e2e8f0] focus:border-[#0ea5e9] transition-colors bg-white" />
               </div>
               <div>
                 <label className="font-['Geist:Medium',sans-serif] font-medium text-[#475569] text-[13px] mb-[6px] block">Observaciones (opcional)</label>
-                <input type="text" value={pagoForm.observaciones} onChange={(e) => handlePagoChange("observaciones", e.target.value)} placeholder="Nota adicional..." className="w-full font-['Geist:Regular',sans-serif] text-[14px] text-[#0f172a] px-[12px] py-[9px] rounded-[8px] outline-none border border-[#e2e8f0] focus:border-[#0ea5e9] transition-colors bg-white" />
+                <input type="text" value={cobroForm.observaciones} onChange={(e) => setCobroForm((p) => ({ ...p, observaciones: e.target.value }))} placeholder="Nota adicional..." className="w-full font-['Geist:Regular',sans-serif] text-[14px] text-[#0f172a] px-[12px] py-[9px] rounded-[8px] outline-none border border-[#e2e8f0] focus:border-[#0ea5e9] transition-colors bg-white" />
               </div>
-              {/* Saldo después del pago */}
-              {pagoForm.monto && parseCurrencyInput(pagoForm.monto) > 0 && (
+              {cobroForm.monto && parseCurrencyInput(cobroForm.monto) > 0 && (
                 <div className="bg-[#f8fafc] p-[12px] rounded-[8px]">
                   <div className="flex items-center justify-between">
-                    <p className="font-['Geist:Regular',sans-serif] text-[#475569] text-[13px]">Saldo después del pago</p>
-                    <p className={`font-['Geist:Bold',sans-serif] font-bold text-[15px] ${saldoDespuesPago <= 0 ? "text-[#10b981]" : "text-[#0f172a]"}`}>
-                      {saldoDespuesPago <= 0 ? "$0" : formatCurrency(saldoDespuesPago)}
+                    <p className="font-['Geist:Regular',sans-serif] text-[#475569] text-[13px]">Saldo después del cobro</p>
+                    <p className={`font-['Geist:Bold',sans-serif] font-bold text-[15px] ${(editingCuota.montoPlanificado - editingCuota.montoPagado - parseCurrencyInput(cobroForm.monto)) <= 0 ? "text-[#10b981]" : "text-[#0f172a]"}`}>
+                      {Math.max(0, editingCuota.montoPlanificado - editingCuota.montoPagado - parseCurrencyInput(cobroForm.monto)) <= 0 ? "$0" : formatCurrency(editingCuota.montoPlanificado - editingCuota.montoPagado - parseCurrencyInput(cobroForm.monto))}
                     </p>
                   </div>
                 </div>
               )}
             </div>
             <div className="flex items-center justify-end gap-[12px] px-[24px] py-[20px]" style={{ borderTop: "1px solid #e2e8f0" }}>
-              <button onClick={handleClosePagoModal} className="font-['Geist:Medium',sans-serif] font-medium text-[14px] text-[#475569] px-[16px] py-[10px] rounded-[8px] hover:bg-[#f1f5f9] transition-colors">Cancelar</button>
-              <button onClick={handleAddPago} className="font-['Geist:SemiBold',sans-serif] font-semibold text-[14px] text-white bg-[#0ea5e9] hover:bg-[#0284c7] transition-colors px-[16px] py-[10px] rounded-[8px]">{editingPago ? "Guardar Cambios" : "Registrar Pago"}</button>
+              <button onClick={() => { setShowIngresarCobroModal(false); setEditingCuota(null); }} className="font-['Geist:Medium',sans-serif] font-medium text-[14px] text-[#475569] px-[16px] py-[10px] rounded-[8px] hover:bg-[#f1f5f9] transition-colors">Cancelar</button>
+              <button onClick={handleIngresarCobro} className="font-['Geist:SemiBold',sans-serif] font-semibold text-[14px] text-white bg-[#0ea5e9] hover:bg-[#0284c7] transition-colors px-[16px] py-[10px] rounded-[8px]">Registrar Cobro</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Editar Cuota */}
+      {showEditarCuotaModal && editingCuota && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowEditarCuotaModal(false)} />
+          <div className="relative bg-white rounded-[16px] w-[420px]" style={{ border: "1px solid #e2e8f0" }}>
+            <div className="flex items-center justify-between px-[24px] py-[20px]" style={{ borderBottom: "1px solid #e2e8f0" }}>
+              <p className="font-['Geist:Bold',sans-serif] font-bold text-[#0f172a] text-[18px]">Editar Cargo #{editingCuota.nro}</p>
+              <button onClick={() => setShowEditarCuotaModal(false)} className="flex items-center justify-center size-[32px] rounded-[8px] hover:bg-[#f1f5f9] transition-colors">
+                <svg fill="none" height="16" viewBox="0 0 16 16" width="16"><path d="M12 4L4 12M4 4L12 12" stroke="#64748b" strokeLinecap="round" strokeWidth="2" /></svg>
+              </button>
+            </div>
+            <div className="px-[24px] py-[20px] flex flex-col gap-[16px]">
+              <div>
+                <label className="font-['Geist:Medium',sans-serif] font-medium text-[#475569] text-[13px] mb-[6px] block">Fecha de Vencimiento *</label>
+                <input
+                  type="text"
+                  value={cuotaForm.fechaVencimiento}
+                  onChange={(e) => setCuotaForm((prev) => ({ ...prev, fechaVencimiento: e.target.value }))}
+                  className={`w-full font-['Geist:Regular',sans-serif] text-[14px] text-[#0f172a] px-[12px] py-[9px] rounded-[8px] outline-none transition-colors bg-white ${cuotaFormErrors.fechaVencimiento ? "border-[#ef4444]" : "border-[#e2e8f0] focus:border-[#0ea5e9]"}`}
+                  style={{ border: `1px solid ${cuotaFormErrors.fechaVencimiento ? "#ef4444" : "#e2e8f0"}` }}
+                />
+                {cuotaFormErrors.fechaVencimiento && <p className="text-[#ef4444] text-[12px] mt-[4px]">{cuotaFormErrors.fechaVencimiento}</p>}
+              </div>
+              <div>
+                <label className="font-['Geist:Medium',sans-serif] font-medium text-[#475569] text-[13px] mb-[6px] block">Monto Planificado *</label>
+                <input
+                  type="text"
+                  value={cuotaForm.montoPlanificado}
+                  onChange={(e) => setCuotaForm((prev) => ({ ...prev, montoPlanificado: e.target.value }))}
+                  placeholder="$ 0"
+                  className={`w-full font-['Geist:Regular',sans-serif] text-[14px] text-[#0f172a] px-[12px] py-[9px] rounded-[8px] outline-none transition-colors bg-white ${cuotaFormErrors.montoPlanificado ? "border-[#ef4444]" : "border-[#e2e8f0] focus:border-[#0ea5e9]"}`}
+                  style={{ border: `1px solid ${cuotaFormErrors.montoPlanificado ? "#ef4444" : "#e2e8f0"}` }}
+                />
+                {cuotaFormErrors.montoPlanificado && <p className="text-[#ef4444] text-[12px] mt-[4px]">{cuotaFormErrors.montoPlanificado}</p>}
+              </div>
+              <div className="bg-[#f8fafc] p-[12px] rounded-[8px]">
+                <div className="flex items-center justify-between">
+                  <p className="font-['Geist:Regular',sans-serif] text-[#475569] text-[13px]">Pagado hasta ahora</p>
+                  <p className="font-['Geist:SemiBold',sans-serif] font-semibold text-[#10b981] text-[14px]">{formatCurrency(editingCuota.montoPagado)}</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-[12px] px-[24px] py-[20px]" style={{ borderTop: "1px solid #e2e8f0" }}>
+              <button onClick={() => setShowEditarCuotaModal(false)} className="font-['Geist:Medium',sans-serif] font-medium text-[14px] text-[#475569] px-[16px] py-[10px] rounded-[8px] hover:bg-[#f1f5f9] transition-colors">Cancelar</button>
+              <button onClick={handleGuardarEditarCuota} className="font-['Geist:SemiBold',sans-serif] font-semibold text-[14px] text-white bg-[#0ea5e9] hover:bg-[#0284c7] transition-colors px-[16px] py-[10px] rounded-[8px]">Guardar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Confirmar Eliminar Cuota */}
+      {showEliminarCuotaConfirm && editingCuota && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => { setShowEliminarCuotaConfirm(false); setEditingCuota(null); }} />
+          <div className="relative bg-white rounded-[16px] w-[380px]" style={{ border: "1px solid #e2e8f0" }}>
+            <div className="px-[24px] py-[20px] flex flex-col gap-[12px]">
+              <p className="font-['Geist:Bold',sans-serif] font-bold text-[#0f172a] text-[16px]">Eliminar Cargo #{editingCuota.nro}</p>
+              <p className="font-['Geist:Regular',sans-serif] text-[#475569] text-[14px]">¿Estás seguro de que querés eliminar este cargo? Esta acción no se puede deshacer.</p>
+              {editingCuota.montoPagado > 0 && (
+                <div className="bg-[#fef3c7] p-[10px] rounded-[8px]">
+                  <p className="font-['Geist:Medium',sans-serif] font-medium text-[#92400e] text-[13px]">Este cargo tiene {formatCurrency(editingCuota.montoPagado)} en pagos registrados.</p>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center justify-end gap-[12px] px-[24px] py-[20px]" style={{ borderTop: "1px solid #e2e8f0" }}>
+              <button onClick={() => { setShowEliminarCuotaConfirm(false); setEditingCuota(null); }} className="font-['Geist:Medium',sans-serif] font-medium text-[14px] text-[#475569] px-[16px] py-[10px] rounded-[8px] hover:bg-[#f1f5f9] transition-colors">Cancelar</button>
+              <button onClick={handleConfirmarEliminarCuota} className="font-['Geist:SemiBold',sans-serif] font-semibold text-[14px] text-white bg-[#ef4444] hover:bg-[#dc2626] transition-colors px-[16px] py-[10px] rounded-[8px]">Eliminar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Pago Inicial */}
+      {showPagoInicialModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowPagoInicialModal(false)} />
+          <div className="relative bg-white rounded-[16px] w-[480px] max-h-[90vh] overflow-y-auto" style={{ border: "1px solid #e2e8f0" }}>
+            <div className="flex items-center justify-between px-[24px] py-[20px]" style={{ borderBottom: "1px solid #e2e8f0" }}>
+              <p className="font-['Geist:Bold',sans-serif] font-bold text-[#0f172a] text-[18px]">{tienePagoInicial ? "Editar Pago Inicial" : "Registrar Pago Inicial"}</p>
+              <button onClick={() => setShowPagoInicialModal(false)} className="flex items-center justify-center size-[32px] rounded-[8px] hover:bg-[#f1f5f9] transition-colors">
+                <svg fill="none" height="16" viewBox="0 0 16 16" width="16"><path d="M12 4L4 12M4 4L12 12" stroke="#64748b" strokeLinecap="round" strokeWidth="2" /></svg>
+              </button>
+            </div>
+            <div className="px-[24px] py-[20px] flex flex-col gap-[16px]">
+              {ficheroTotal > 0 && (
+                <div className="bg-[#f0fdf4] p-[12px] rounded-[8px]">
+                  <p className="font-['Geist:Regular',sans-serif] text-[#166534] text-[12px]">
+                    Total del fichero: <span className="font-semibold">{formatCurrency(ficheroTotal)}</span>
+                    {tienePagoInicial && (
+                      <> — Ya registrado: <span className="font-semibold">{formatCurrency(pagoInicialMonto)}</span></>
+                    )}
+                  </p>
+                </div>
+              )}
+              <div>
+                <label className="font-['Geist:Medium',sans-serif] font-medium text-[#475569] text-[13px] mb-[6px] block">Monto *</label>
+                <input
+                  type="text"
+                  value={pagoInicialForm.monto}
+                  onChange={(e) => setPagoInicialForm((p) => ({ ...p, monto: e.target.value }))}
+                  placeholder="$ 0"
+                  className={cobroInputClass("piMonto")}
+                  style={{ border: `1px solid ${pagoInicialErrors.monto ? "#ef4444" : "#e2e8f0"}` }}
+                />
+                {pagoInicialErrors.monto && <p className="text-[#ef4444] text-[12px] mt-[4px]">{pagoInicialErrors.monto}</p>}
+              </div>
+              <div>
+                <label className="font-['Geist:Medium',sans-serif] font-medium text-[#475569] text-[13px] mb-[6px] block">Método de Pago *</label>
+                <select
+                  value={pagoInicialForm.metodo}
+                  onChange={(e) => setPagoInicialForm((p) => ({ ...p, metodo: e.target.value }))}
+                  className={cobroInputClass("piMetodo")}
+                  style={{ border: `1px solid ${pagoInicialErrors.metodo ? "#ef4444" : "#e2e8f0"}` }}
+                >
+                  {metodosPago.map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>
+                {pagoInicialErrors.metodo && <p className="text-[#ef4444] text-[12px] mt-[4px]">{pagoInicialErrors.metodo}</p>}
+              </div>
+              <div>
+                <label className="font-['Geist:Medium',sans-serif] font-medium text-[#475569] text-[13px] mb-[6px] block">Nro. Comprobante (opcional)</label>
+                <input
+                  type="text"
+                  value={pagoInicialForm.comprobante}
+                  onChange={(e) => setPagoInicialForm((p) => ({ ...p, comprobante: e.target.value }))}
+                  placeholder="Ej: TR-12345"
+                  className="w-full font-['Geist:Regular',sans-serif] text-[14px] text-[#0f172a] px-[12px] py-[9px] rounded-[8px] outline-none border border-[#e2e8f0] focus:border-[#0ea5e9] transition-colors bg-white"
+                />
+              </div>
+              <div>
+                <label className="font-['Geist:Medium',sans-serif] font-medium text-[#475569] text-[13px] mb-[6px] block">Observaciones (opcional)</label>
+                <input
+                  type="text"
+                  value={pagoInicialForm.observaciones}
+                  onChange={(e) => setPagoInicialForm((p) => ({ ...p, observaciones: e.target.value }))}
+                  placeholder="Nota adicional..."
+                  className="w-full font-['Geist:Regular',sans-serif] text-[14px] text-[#0f172a] px-[12px] py-[9px] rounded-[8px] outline-none border border-[#e2e8f0] focus:border-[#0ea5e9] transition-colors bg-white"
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-[12px] px-[24px] py-[20px]" style={{ borderTop: "1px solid #e2e8f0" }}>
+              <button onClick={() => setShowPagoInicialModal(false)} className="font-['Geist:Medium',sans-serif] font-medium text-[14px] text-[#475569] px-[16px] py-[10px] rounded-[8px] hover:bg-[#f1f5f9] transition-colors">Cancelar</button>
+              <button onClick={handlePagoInicial} className="font-['Geist:SemiBold',sans-serif] font-semibold text-[14px] text-white bg-[#10b981] hover:bg-[#059669] transition-colors px-[16px] py-[10px] rounded-[8px]">{tienePagoInicial ? "Guardar Cambios" : "Registrar Pago"}</button>
             </div>
           </div>
         </div>
