@@ -38,6 +38,8 @@ export default function ClienteFicheroModal({ clienteId, clienteState, onClose }
     equipoFiltrado: "",
     manoObraVereda: false,
     costoManoObra: "",
+    tipoCobro: "libre",
+    cantCuotas: 3,
   });
   const [ficheroErrors, setFicheroErrors] = useState<Record<string, string>>({});
   const [showPagoModal, setShowPagoModal] = useState(false);
@@ -242,6 +244,8 @@ export default function ClienteFicheroModal({ clienteId, clienteState, onClose }
       equipoFiltrado: "",
       manoObraVereda: false,
       costoManoObra: "",
+      tipoCobro: "libre",
+      cantCuotas: 3,
     });
     setFicheroErrors({});
   }
