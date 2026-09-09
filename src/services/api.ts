@@ -59,6 +59,10 @@ export function saveFichero(clienteId: string, data: {
   return request<{ ok: true }>(`/clientes/${clienteId}/fichero`, { method: "POST", body: JSON.stringify(data) });
 }
 
+export function deleteFichero(clienteId: string) {
+  return request<{ ok: true }>(`/clientes/${clienteId}/fichero`, { method: "DELETE" });
+}
+
 // --- Pago Inicial ---
 export function registrarPagoInicial(clienteId: string, data: { monto: number; metodo?: string; comprobante?: string; observaciones?: string }) {
   return request<{ ok: true }>(`/clientes/${clienteId}/fichero/pago-inicial`, { method: "POST", body: JSON.stringify(data) });
