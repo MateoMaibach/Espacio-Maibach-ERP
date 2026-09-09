@@ -7,7 +7,8 @@ import {
   formatCurrency, parseCurrencyInput, getCurrentDate,
   type FicheroItem, type FicheroForm,
 } from "@/data/clienteDetalleData";
-import { getCliente, saveFichero, registrarPagoInicial, generarPlanCuotas, agregarCargo, editarCuota, registrarCobro, eliminarCuota } from "@/services/api";
+import { getCliente, saveFichero, registrarPagoInicial, generarPlanCuotas, agregarCargo, editarCuota, registrarCobro, eliminarCuota, updateCliente, deleteCliente, deleteFichero } from "@/services/api";
+import LocalidadSelector from "@/components/LocalidadSelector";
 
 interface Cuota {
   id: string;
@@ -153,6 +154,8 @@ export default function ClienteDetalle() {
     cantCuotas: 3,
   });
   const [ficheroErrors, setFicheroErrors] = useState<Record<string, string>>({});
+  const [showFicheroMenu, setShowFicheroMenu] = useState(false);
+  const [showEliminarFicheroConfirm, setShowEliminarFicheroConfirm] = useState(false);
 
   // Unified cobros states
   const [editingCuota, setEditingCuota] = useState<Cuota | null>(null);
@@ -177,6 +180,12 @@ export default function ClienteDetalle() {
 
   const [cuotaForm, setCuotaForm] = useState({ fechaVencimiento: "", montoPlanificado: "" });
   const [cuotaFormErrors, setCuotaFormErrors] = useState<Record<string, string>>({});
+
+  // Edit/Delete client states
+  const [showEditClienteModal, setShowEditClienteModal] = useState(false);
+  const [editClienteForm, setEditClienteForm] = useState({ nombre: "", dni: "", telefono: "", email: "", direccion: "", localidad: "Paraná", estado: "Activo" });
+  const [editClienteErrors, setEditClienteErrors] = useState<Record<string, string>>({});
+  const [showDeleteClienteConfirm, setShowDeleteClienteConfirm] = useState(false);
 
   // Fichero calculated values
   const itemsSubtotales = ficheroForm.items.map((item) => {
@@ -488,6 +497,71 @@ export default function ClienteDetalle() {
     }
   }
 
+  // --- Edit/Delete Client handlers ---
+  function handleOpenEditCliente() {
+    if (!cliente) return;
+    setEditClienteForm({
+      nombre: cliente.nombre,
+      dni: cliente.dni,
+      telefono: cliente.telefono,
+      email: cliente.email === "-" ? "" : cliente.email,
+      direccion: cliente.direccion === "-" ? "" : cliente.direccion,
+      localidad: cliente.localidad || "Paraná",
+      estado: cliente.estado || "Activo",
+    });
+    setEditClienteErrors({});
+    setShowEditClienteModal(true);
+  }
+
+  function validateEditCliente(): boolean {
+    const newErrors: Record<string, string> = {};
+    if (!editClienteForm.nombre.trim()) newErrors.nombre = "El nombre es obligatorio";
+    if (!editClienteForm.dni.trim()) newErrors.dni = "El DNI/CUIT es obligatorio";
+    if (!editClienteForm.telefono.trim()) newErrors.telefono = "El teléfono es obligatorio";
+    setEditClienteErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  }
+
+  async function handleGuardarEditCliente() {
+    if (!validateEditCliente() || !id) return;
+    try {
+      await updateCliente(id, {
+        nombre: editClienteForm.nombre.trim(),
+        dni: editClienteForm.dni.trim(),
+        telefono: editClienteForm.telefono.trim(),
+        email: editClienteForm.email.trim(),
+        direccion: editClienteForm.direccion.trim(),
+        localidad: editClienteForm.localidad,
+        estado: editClienteForm.estado,
+      });
+      reloadCliente();
+      setShowEditClienteModal(false);
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  async function handleEliminarCliente() {
+    if (!id) return;
+    try {
+      await deleteCliente(id);
+      navigate("/clientes");
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  async function handleEliminarFichero() {
+    if (!id) return;
+    try {
+      await deleteFichero(id);
+      reloadCliente();
+      setShowEliminarFicheroConfirm(false);
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
   const ficheroInputClass = (field: string) =>
     `w-full font-['Geist:Regular',sans-serif] text-[14px] text-[#0f172a] px-[12px] py-[9px] rounded-[8px] outline-none transition-colors bg-white ${
       ficheroErrors[field] ? "border-[#ef4444] focus:border-[#ef4444]" : "border-[#e2e8f0] focus:border-[#0ea5e9]"
@@ -533,7 +607,43 @@ export default function ClienteDetalle() {
             </svg>
           </button>
           <div>
-            <p className="font-['Geist:Bold',sans-serif] font-bold text-[#0f172a] text-[24px]">{cliente.nombre}</p>
+            <div className="flex items-center gap-[12px]">
+              <p className="font-['Geist:Bold',sans-serif] font-bold text-[#0f172a] text-[24px]">{cliente.nombre}</p>
+              <div className="relative">
+                <button
+                  onClick={() => setShowFicheroMenu(!showFicheroMenu)}
+                  className="size-[32px] flex items-center justify-center rounded-[8px] hover:bg-[#f1f5f9] transition-colors"
+                >
+                  <svg fill="none" height="16" viewBox="0 0 16 16" width="16">
+                    <circle cx="8" cy="3" r="1.5" fill="#64748b" />
+                    <circle cx="8" cy="8" r="1.5" fill="#64748b" />
+                    <circle cx="8" cy="13" r="1.5" fill="#64748b" />
+                  </svg>
+                </button>
+                {showFicheroMenu && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowFicheroMenu(false)} />
+                    <div className="absolute left-0 top-full mt-[4px] z-50 bg-white rounded-[8px] py-[4px] min-w-[180px] shadow-lg" style={{ border: "1px solid #e2e8f0" }}>
+                      <button
+                        onClick={() => { setShowFicheroMenu(false); handleOpenEditCliente(); }}
+                        className="w-full flex items-center gap-[8px] px-[12px] py-[8px] text-left font-['Geist:Regular',sans-serif] text-[13px] text-[#0f172a] hover:bg-[#f1f5f9] transition-colors"
+                      >
+                        <svg fill="none" height="14" viewBox="0 0 16 16" width="14"><path d="M11.5 1.5L14.5 4.5L5 14H2V11L11.5 1.5Z" stroke="#64748b" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" /></svg>
+                        Editar Cliente
+                      </button>
+                      <div className="my-[4px]" style={{ borderTop: "1px solid #e2e8f0" }} />
+                      <button
+                        onClick={() => { setShowFicheroMenu(false); setShowDeleteClienteConfirm(true); }}
+                        className="w-full flex items-center gap-[8px] px-[12px] py-[8px] text-left font-['Geist:Regular',sans-serif] text-[13px] text-[#ef4444] hover:bg-[#fee2e2] transition-colors"
+                      >
+                        <svg fill="none" height="14" viewBox="0 0 16 16" width="14"><path d="M2 4H14M5 4V2H11V4M6 7V12M10 7V12M3 4L4 14H12L13 4" stroke="#ef4444" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" /></svg>
+                        Eliminar Cliente
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
             <p className="font-['Geist:Regular',sans-serif] font-normal text-[#475569] text-[14px] mt-[2px]">Ficha de cliente y desglose de cuenta activa</p>
           </div>
         </div>
@@ -1309,6 +1419,101 @@ export default function ClienteDetalle() {
             <div className="flex items-center justify-end gap-[12px] px-[24px] py-[20px]" style={{ borderTop: "1px solid #e2e8f0" }}>
               <button onClick={() => setShowPagoInicialModal(false)} className="font-['Geist:Medium',sans-serif] font-medium text-[14px] text-[#475569] px-[16px] py-[10px] rounded-[8px] hover:bg-[#f1f5f9] transition-colors">Cancelar</button>
               <button onClick={handlePagoInicial} className="font-['Geist:SemiBold',sans-serif] font-semibold text-[14px] text-white bg-[#10b981] hover:bg-[#059669] transition-colors px-[16px] py-[10px] rounded-[8px]">{tienePagoInicial ? "Guardar Cambios" : "Registrar Pago"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Editar Cliente */}
+      {showEditClienteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowEditClienteModal(false)} />
+          <div className="relative bg-white rounded-[16px] w-[520px] max-h-[90vh] overflow-y-auto" style={{ border: "1px solid #e2e8f0" }}>
+            <div className="flex items-center justify-between px-[24px] py-[20px]" style={{ borderBottom: "1px solid #e2e8f0" }}>
+              <p className="font-['Geist:Bold',sans-serif] font-bold text-[#0f172a] text-[18px]">Editar Cliente</p>
+              <button onClick={() => setShowEditClienteModal(false)} className="flex items-center justify-center size-[32px] rounded-[8px] hover:bg-[#f1f5f9] transition-colors">
+                <svg fill="none" height="16" viewBox="0 0 16 16" width="16"><path d="M12 4L4 12M4 4L12 12" stroke="#64748b" strokeLinecap="round" strokeWidth="2" /></svg>
+              </button>
+            </div>
+            <div className="px-[24px] py-[20px] flex flex-col gap-[16px]">
+              <div>
+                <label className="font-['Geist:Medium',sans-serif] font-medium text-[#475569] text-[13px] mb-[6px] block">Nombre completo *</label>
+                <input type="text" value={editClienteForm.nombre} onChange={(e) => { setEditClienteForm((p) => ({ ...p, nombre: e.target.value })); if (editClienteErrors.nombre) setEditClienteErrors((p) => ({ ...p, nombre: "" })); }} className={`w-full font-['Geist:Regular',sans-serif] text-[14px] text-[#0f172a] px-[12px] py-[9px] rounded-[8px] outline-none transition-colors bg-white ${editClienteErrors.nombre ? "border-[#ef4444]" : "border-[#e2e8f0] focus:border-[#0ea5e9]"}`} style={{ border: `1px solid ${editClienteErrors.nombre ? "#ef4444" : "#e2e8f0"}` }} />
+                {editClienteErrors.nombre && <p className="text-[#ef4444] text-[12px] mt-[4px]">{editClienteErrors.nombre}</p>}
+              </div>
+              <div className="grid grid-cols-2 gap-[12px]">
+                <div>
+                  <label className="font-['Geist:Medium',sans-serif] font-medium text-[#475569] text-[13px] mb-[6px] block">DNI / CUIT *</label>
+                  <input type="text" value={editClienteForm.dni} onChange={(e) => { setEditClienteForm((p) => ({ ...p, dni: e.target.value })); if (editClienteErrors.dni) setEditClienteErrors((p) => ({ ...p, dni: "" })); }} className={`w-full font-['Geist:Regular',sans-serif] text-[14px] text-[#0f172a] px-[12px] py-[9px] rounded-[8px] outline-none transition-colors bg-white ${editClienteErrors.dni ? "border-[#ef4444]" : "border-[#e2e8f0] focus:border-[#0ea5e9]"}`} style={{ border: `1px solid ${editClienteErrors.dni ? "#ef4444" : "#e2e8f0"}` }} />
+                  {editClienteErrors.dni && <p className="text-[#ef4444] text-[12px] mt-[4px]">{editClienteErrors.dni}</p>}
+                </div>
+                <div>
+                  <label className="font-['Geist:Medium',sans-serif] font-medium text-[#475569] text-[13px] mb-[6px] block">Teléfono *</label>
+                  <input type="text" value={editClienteForm.telefono} onChange={(e) => { setEditClienteForm((p) => ({ ...p, telefono: e.target.value })); if (editClienteErrors.telefono) setEditClienteErrors((p) => ({ ...p, telefono: "" })); }} className={`w-full font-['Geist:Regular',sans-serif] text-[14px] text-[#0f172a] px-[12px] py-[9px] rounded-[8px] outline-none transition-colors bg-white ${editClienteErrors.telefono ? "border-[#ef4444]" : "border-[#e2e8f0] focus:border-[#0ea5e9]"}`} style={{ border: `1px solid ${editClienteErrors.telefono ? "#ef4444" : "#e2e8f0"}` }} />
+                  {editClienteErrors.telefono && <p className="text-[#ef4444] text-[12px] mt-[4px]">{editClienteErrors.telefono}</p>}
+                </div>
+              </div>
+              <div>
+                <label className="font-['Geist:Medium',sans-serif] font-medium text-[#475569] text-[13px] mb-[6px] block">Email</label>
+                <input type="email" value={editClienteForm.email} onChange={(e) => setEditClienteForm((p) => ({ ...p, email: e.target.value }))} className="w-full font-['Geist:Regular',sans-serif] text-[14px] text-[#0f172a] px-[12px] py-[9px] rounded-[8px] outline-none border border-[#e2e8f0] focus:border-[#0ea5e9] transition-colors bg-white" />
+              </div>
+              <div>
+                <label className="font-['Geist:Medium',sans-serif] font-medium text-[#475569] text-[13px] mb-[6px] block">Dirección</label>
+                <input type="text" value={editClienteForm.direccion} onChange={(e) => setEditClienteForm((p) => ({ ...p, direccion: e.target.value }))} className="w-full font-['Geist:Regular',sans-serif] text-[14px] text-[#0f172a] px-[12px] py-[9px] rounded-[8px] outline-none border border-[#e2e8f0] focus:border-[#0ea5e9] transition-colors bg-white" />
+              </div>
+              <div className="grid grid-cols-2 gap-[12px]">
+                <LocalidadSelector value={editClienteForm.localidad} onChange={(v) => setEditClienteForm((p) => ({ ...p, localidad: v }))} />
+                <div>
+                  <label className="font-['Geist:Medium',sans-serif] font-medium text-[#475569] text-[13px] mb-[6px] block">Estado</label>
+                  <select value={editClienteForm.estado} onChange={(e) => setEditClienteForm((p) => ({ ...p, estado: e.target.value }))} className="w-full font-['Geist:Regular',sans-serif] text-[14px] text-[#0f172a] px-[12px] py-[9px] rounded-[8px] outline-none border border-[#e2e8f0] bg-white cursor-pointer">
+                    <option value="Activo">Activo</option>
+                    <option value="Moroso">Moroso</option>
+                    <option value="Inactivo">Inactivo</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-[12px] px-[24px] py-[20px]" style={{ borderTop: "1px solid #e2e8f0" }}>
+              <button onClick={() => setShowEditClienteModal(false)} className="font-['Geist:Medium',sans-serif] font-medium text-[14px] text-[#475569] px-[16px] py-[10px] rounded-[8px] hover:bg-[#f1f5f9] transition-colors">Cancelar</button>
+              <button onClick={handleGuardarEditCliente} className="font-['Geist:SemiBold',sans-serif] font-semibold text-[14px] text-white bg-[#0ea5e9] hover:bg-[#0284c7] transition-colors px-[16px] py-[10px] rounded-[8px]">Guardar Cambios</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Confirmar Eliminar Cliente */}
+      {showDeleteClienteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowDeleteClienteConfirm(false)} />
+          <div className="relative bg-white rounded-[16px] w-[400px]" style={{ border: "1px solid #e2e8f0" }}>
+            <div className="px-[24px] py-[20px] flex flex-col gap-[12px]">
+              <p className="font-['Geist:Bold',sans-serif] font-bold text-[#0f172a] text-[16px]">Eliminar Cliente</p>
+              <p className="font-['Geist:Regular',sans-serif] text-[#475569] text-[14px]">
+                ¿Estás seguro de que querés eliminar a <span className="font-semibold">{cliente?.nombre}</span> y su <span className="font-semibold">fichero</span>? Se eliminarán también todas las cuotas asociadas. No se puede deshacer.
+              </p>
+            </div>
+            <div className="flex items-center justify-end gap-[12px] px-[24px] py-[20px]" style={{ borderTop: "1px solid #e2e8f0" }}>
+              <button onClick={() => setShowDeleteClienteConfirm(false)} className="font-['Geist:Medium',sans-serif] font-medium text-[14px] text-[#475569] px-[16px] py-[10px] rounded-[8px] hover:bg-[#f1f5f9] transition-colors">Cancelar</button>
+              <button onClick={handleEliminarCliente} className="font-['Geist:SemiBold',sans-serif] font-semibold text-[14px] text-white bg-[#ef4444] hover:bg-[#dc2626] transition-colors px-[16px] py-[10px] rounded-[8px]">Eliminar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Confirmar Eliminar Fichero */}
+      {showEliminarFicheroConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowEliminarFicheroConfirm(false)} />
+          <div className="relative bg-white rounded-[16px] w-[400px]" style={{ border: "1px solid #e2e8f0" }}>
+            <div className="px-[24px] py-[20px] flex flex-col gap-[12px]">
+              <p className="font-['Geist:Bold',sans-serif] font-bold text-[#0f172a] text-[16px]">Eliminar Fichero</p>
+              <p className="font-['Geist:Regular',sans-serif] text-[#475569] text-[14px]">
+                ¿Estás seguro de que querés eliminar el fichero de <span className="font-semibold">{cliente?.nombre}</span>? Se eliminarán también todas las cuotas y pagos asociados. No se puede deshacer.
+              </p>
+            </div>
+            <div className="flex items-center justify-end gap-[12px] px-[24px] py-[20px]" style={{ borderTop: "1px solid #e2e8f0" }}>
+              <button onClick={() => setShowEliminarFicheroConfirm(false)} className="font-['Geist:Medium',sans-serif] font-medium text-[14px] text-[#475569] px-[16px] py-[10px] rounded-[8px] hover:bg-[#f1f5f9] transition-colors">Cancelar</button>
+              <button onClick={handleEliminarFichero} className="font-['Geist:SemiBold',sans-serif] font-semibold text-[14px] text-white bg-[#ef4444] hover:bg-[#dc2626] transition-colors px-[16px] py-[10px] rounded-[8px]">Eliminar</button>
             </div>
           </div>
         </div>
