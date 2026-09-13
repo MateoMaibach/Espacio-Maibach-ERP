@@ -48,3 +48,43 @@ export const cuotas = sqliteTable("cuotas", {
   descripcion: text("descripcion"),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
+
+export const cajas = sqliteTable("cajas", {
+  id: text("id").primaryKey(),
+  nombre: text("nombre").notNull(),
+  color: text("color").notNull(),
+  orden: integer("orden").notNull().default(0),
+  activa: integer("activa").notNull().default(1),
+  afectaGeneral: integer("afecta_general").notNull().default(1),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+});
+
+export const movimientos = sqliteTable("movimientos", {
+  id: text("id").primaryKey(),
+  fecha: text("fecha").notNull(),
+  concepto: text("concepto").notNull(),
+  monto: integer("monto").notNull(),
+  tipo: text("tipo").notNull(),
+  subCaja: text("sub_caja").notNull(),
+  moneda: text("moneda").notNull().default("ARS"),
+  tipoCambio: integer("tipo_cambio"),
+  categoria: text("categoria"),
+  comprobante: text("comprobante"),
+  observaciones: text("observaciones"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+});
+
+export const cierres = sqliteTable("cierres", {
+  id: text("id").primaryKey(),
+  mes: integer("mes").notNull(),
+  anio: integer("anio").notNull(),
+  subCaja: text("sub_caja").notNull(),
+  saldoInicial: integer("saldo_inicial").notNull(),
+  saldoFinal: integer("saldo_final").notNull(),
+  saldoReal: integer("saldo_real").notNull(),
+  diferencia: integer("diferencia").notNull().default(0),
+  fecha: text("fecha").notNull(),
+  fechaCierre: text("fecha_cierre").notNull(),
+  observaciones: text("observaciones"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+});
