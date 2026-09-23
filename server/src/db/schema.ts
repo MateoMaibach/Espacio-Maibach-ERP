@@ -88,3 +88,31 @@ export const cierres = sqliteTable("cierres", {
   observaciones: text("observaciones"),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
+
+export const bancos = sqliteTable("bancos", {
+  id: text("id").primaryKey(),
+  nombre: text("nombre").notNull().unique(),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+});
+
+export const cheques = sqliteTable("cheques", {
+  id: text("id").primaryKey(),
+  tipo: text("tipo").notNull(),
+  banco: text("banco").notNull(),
+  sucursal: text("sucursal"),
+  numero: text("numero").notNull(),
+  recibidoDe: text("recibido_de"),
+  destinatario: text("destinatario"),
+  fechaEmision: text("fecha_emision"),
+  fechaCobro: text("fecha_cobro").notNull(),
+  fechaPago: text("fecha_pago"),
+  fechaRecepcion: text("fecha_recepcion"),
+  entregadoA: text("entregado_a"),
+  fechaEntrega: text("fecha_entrega"),
+  importe: integer("importe").notNull(),
+  estado: text("estado").notNull(),
+  clienteId: text("cliente_id").references(() => clientes.id, { onDelete: "set null" }),
+  aplicaPagoProveedor: integer("aplica_pago_proveedor").notNull().default(0),
+  proveedorId: text("proveedor_id"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+});

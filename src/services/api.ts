@@ -214,3 +214,93 @@ export function updateCaja(id: string, data: Record<string, any>) {
 export function deleteCaja(id: string) {
   return request<{ ok: true }>(`/cajas/${id}`, { method: "DELETE" });
 }
+
+// --- Cheques ---
+export type ChequeTipo = "emitido" | "recibido";
+
+export interface Cheque {
+  id: string;
+  tipo: ChequeTipo;
+  banco: string;
+  sucursal: string | null;
+  numero: string;
+  recibidoDe: string | null;
+  destinatario: string | null;
+  fechaEmision: string | null;
+  fechaCobro: string;
+  fechaPago: string | null;
+  fechaRecepcion: string | null;
+  entregadoA: string | null;
+  fechaEntrega: string | null;
+  importe: number;
+  estado: string;
+  clienteId: string | null;
+  clienteNombre: string | null;
+  aplicaPagoProveedor: number;
+  proveedorId: string | null;
+  createdAt: Date;
+}
+
+export interface ChequeInput {
+  tipo: ChequeTipo;
+  banco: string;
+  sucursal?: string;
+  numero: string;
+  recibidoDe?: string;
+  destinatario?: string;
+  fechaEmision?: string;
+  fechaCobro: string;
+  fechaPago?: string;
+  fechaRecepcion?: string;
+  entregadoA?: string;
+  fechaEntrega?: string;
+  importe: number;
+  estado?: string;
+  clienteId?: string | null;
+  aplicaPagoProveedor?: number;
+  proveedorId?: string | null;
+}
+
+export function getCheques(tipo?: ChequeTipo) {
+  const params = tipo ? `?tipo=${tipo}` : "";
+  return request<Cheque[]>(`/cheques${params}`);
+}
+
+export function getCheque(id: string) {
+  return request<Cheque>(`/cheques/${id}`);
+}
+
+export function createCheque(data: ChequeInput) {
+  return request<{ ok: true; id: string }>("/cheques", { method: "POST", body: JSON.stringify(data) });
+}
+
+export function updateCheque(id: string, data: Partial<ChequeInput>) {
+  return request<{ ok: true }>(`/cheques/${id}`, { method: "PUT", body: JSON.stringify(data) });
+}
+
+export function deleteCheque(id: string) {
+  return request<{ ok: true }>(`/cheques/${id}`, { method: "DELETE" });
+}
+
+// --- Bancos ---
+export interface Banco {
+  id: string;
+  nombre: string;
+  createdAt: Date;
+}
+
+export function getBancos() {
+  return request<Banco[]>("/bancos");
+}
+
+export function createBanco(data: { nombre: string }) {
+  return request<{ ok: true; id: string }>("/bancos", { method: "POST", body: JSON.stringify(data) });
+}
+
+export function updateBanco(id: string, data: { nombre?: string }) {
+  return request<{ ok: true }>(`/bancos/${id}`, { method: "PUT", body: JSON.stringify(data) });
+}
+
+export function deleteBanco(id: string) {
+  return request<{ ok: true }>(`/bancos/${id}`, { method: "DELETE" });
+}
