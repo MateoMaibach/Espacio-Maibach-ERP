@@ -66,6 +66,45 @@ async function migrate() {
     )
   `);
 
+  db.run(/*sql*/ `
+    CREATE TABLE IF NOT EXISTS bancos (
+      id TEXT PRIMARY KEY,
+      nombre TEXT NOT NULL UNIQUE,
+      created_at INTEGER NOT NULL
+    )
+  `);
+
+  db.run(/*sql*/ `
+    CREATE TABLE IF NOT EXISTS cheques (
+      id TEXT PRIMARY KEY,
+      tipo TEXT NOT NULL,
+      banco TEXT NOT NULL,
+      sucursal TEXT,
+      numero TEXT NOT NULL,
+      recibido_de TEXT,
+      destinatario TEXT,
+      fecha_emision TEXT,
+      fecha_cobro TEXT NOT NULL,
+      fecha_pago TEXT,
+      fecha_recepcion TEXT,
+      entregado_a TEXT,
+      fecha_entrega TEXT,
+      importe INTEGER NOT NULL,
+      estado TEXT NOT NULL,
+      cliente_id TEXT REFERENCES clientes(id) ON DELETE SET NULL,
+      aplica_pago_proveedor INTEGER NOT NULL DEFAULT 0,
+      proveedor_id TEXT,
+      created_at INTEGER NOT NULL
+    )
+  `);
+
+  const chequesCols = sqlite.prepare("PRAGMA table_info(cheques)").all() as { name: string }[];
+  if (!chequesCols.some((c) => c.name === "aplica_pago_proveedor")) {
+    console.log("Agregando columnas de pago a proveedor a cheques...");
+    db.run("ALTER TABLE cheques ADD COLUMN aplica_pago_proveedor INTEGER NOT NULL DEFAULT 0");
+    db.run("ALTER TABLE cheques ADD COLUMN proveedor_id TEXT");
+  }
+
   console.log("Tablas creadas correctamente.");
 }
 

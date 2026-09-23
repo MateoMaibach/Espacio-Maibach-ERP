@@ -6,7 +6,8 @@ import {
   getMovimientos, createMovimiento, updateMovimiento, deleteMovimiento,
   getResumenCaja, getCierres, getCierresPreview, realizarCierre,
   getCajas, createCaja, updateCaja, deleteCaja,
-  type Movimiento, type ResumenCaja, type Cierre, type CajaItem,
+  getBancos, createBanco, updateBanco, deleteBanco,
+  type Movimiento, type ResumenCaja, type Cierre, type CajaItem, type Banco,
 } from "@/services/api";
 
 const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
@@ -169,6 +170,13 @@ export default function Caja() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [deleteCajaConfirm, setDeleteCajaConfirm] = useState<string | null>(null);
 
+  const [bancos, setBancos] = useState<Banco[]>([]);
+  const [showBancosAdmin, setShowBancosAdmin] = useState(false);
+  const [showBancoModal, setShowBancoModal] = useState(false);
+  const [editingBanco, setEditingBanco] = useState<Banco | null>(null);
+  const [bancoForm, setBancoForm] = useState({ nombre: "" });
+  const [deleteBancoConfirm, setDeleteBancoConfirm] = useState<string | null>(null);
+
   const cargarCajas = useCallback(async () => {
     try {
       const data = await getCajas();
@@ -198,7 +206,17 @@ export default function Caja() {
     }
   }, [mes, anio, filtroSubCaja]);
 
+  const cargarBancos = useCallback(async () => {
+    try {
+      const data = await getBancos();
+      setBancos(data);
+    } catch (err) {
+      console.error(err);
+    }
+  }, []);
+
   useEffect(() => { cargarCajas(); }, [cargarCajas]);
+  useEffect(() => { cargarBancos(); }, [cargarBancos]);
   useEffect(() => { cargarDatos(); }, [cargarDatos]);
 
   useEffect(() => {
@@ -351,6 +369,33 @@ export default function Caja() {
     catch (err: any) { alert(err.message || "Error al eliminar caja"); }
   }
 
+  function handleCrearBanco() {
+    setEditingBanco(null);
+    setBancoForm({ nombre: "" });
+    setShowBancoModal(true);
+  }
+
+  function handleEditarBanco(b: Banco) {
+    setEditingBanco(b);
+    setBancoForm({ nombre: b.nombre });
+    setShowBancoModal(true);
+  }
+
+  async function handleGuardarBanco() {
+    if (!bancoForm.nombre.trim()) { alert("El nombre es obligatorio"); return; }
+    try {
+      if (editingBanco) await updateBanco(editingBanco.id, { nombre: bancoForm.nombre.trim() });
+      else await createBanco({ nombre: bancoForm.nombre.trim() });
+      setShowBancoModal(false);
+      cargarBancos();
+    } catch (err: any) { alert(err.message || "Error al guardar banco"); }
+  }
+
+  async function handleEliminarBanco(id: string) {
+    try { await deleteBanco(id); setDeleteBancoConfirm(null); cargarBancos(); }
+    catch (err: any) { alert(err.message || "Error al eliminar banco"); }
+  }
+
   function handleMesAnterior() {
     if (mes === 1) { setMes(12); setAnio(anio - 1); }
     else { setMes(mes - 1); }
@@ -391,6 +436,9 @@ export default function Caja() {
             </div>
             <button onClick={() => setShowCajasAdmin(!showCajasAdmin)} className={`font-['Geist:Medium',sans-serif] font-medium text-[13px] px-[14px] py-[10px] rounded-[8px] transition-colors border ${showCajasAdmin ? "bg-[#0f172a] text-white border-[#0f172a]" : "bg-white text-[#475569] border-[#e2e8f0] hover:bg-[#f8fafc]"}`}>
               Gestionar Cajas
+            </button>
+            <button onClick={() => setShowBancosAdmin(!showBancosAdmin)} className={`font-['Geist:Medium',sans-serif] font-medium text-[13px] px-[14px] py-[10px] rounded-[8px] transition-colors border ${showBancosAdmin ? "bg-[#0f172a] text-white border-[#0f172a]" : "bg-white text-[#475569] border-[#e2e8f0] hover:bg-[#f8fafc]"}`}>
+              Gestionar Bancos
             </button>
             <button onClick={handleNuevoMovimiento} className="flex items-center gap-[8px] bg-[#0ea5e9] hover:bg-[#0284c7] transition-colors text-white font-['Geist:SemiBold',sans-serif] font-semibold text-[14px] px-[16px] py-[10px] rounded-[8px]">
               <IconPlus /> Nuevo Movimiento
@@ -443,6 +491,51 @@ export default function Caja() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* Bancos Admin Section */}
+        {showBancosAdmin && (
+          <div className="bg-white p-[20px] rounded-[12px]" style={{ border: "1px solid #e2e8f0" }}>
+            <div className="flex items-center justify-between mb-[16px]">
+              <div>
+                <p className="font-['Geist:Bold',sans-serif] font-bold text-[#0f172a] text-[16px]">Gestionar Bancos</p>
+                <p className="font-['Geist:Regular',sans-serif] text-[#94a3b8] text-[12px] mt-[2px]">Bancos disponibles para seleccionar en Cheques</p>
+              </div>
+              <button onClick={handleCrearBanco} className="flex items-center gap-[6px] bg-[#0ea5e9] hover:bg-[#0284c7] transition-colors text-white font-['Geist:SemiBold',sans-serif] font-semibold text-[13px] px-[12px] py-[8px] rounded-[8px]">
+                <IconPlus /> Nuevo Banco
+              </button>
+            </div>
+            {bancos.length === 0 ? (
+              <p className="font-['Geist:Regular',sans-serif] text-[#94a3b8] text-[13px] py-[12px]">No hay bancos cargados. Creá el primero con "Nuevo Banco".</p>
+            ) : (
+              <table className="w-full">
+                <thead>
+                  <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
+                    {["Nombre", ""].map((h, i) => (
+                      <th key={i} className="text-left font-['Geist:Medium',sans-serif] font-medium text-[#475569] text-[13px] py-[8px]">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {bancos.map((b) => (
+                    <tr key={b.id} className="group hover:bg-[#f8fafc] transition-colors" style={{ borderBottom: "1px solid #f1f5f9" }}>
+                      <td className="font-['Geist:Medium',sans-serif] font-medium text-[#0f172a] text-[14px] py-[12px]">{b.nombre}</td>
+                      <td className="py-[12px]">
+                        <div className="flex items-center gap-[4px] justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button onClick={() => handleEditarBanco(b)} className="p-[4px] rounded-[4px] hover:bg-[#e2e8f0] transition-colors" title="Editar">
+                            <svg fill="none" height="14" viewBox="0 0 14 14" width="14"><path d="M10.5 1.5L12.5 3.5L4 12H2V10L10.5 1.5Z" stroke="#475569" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                          </button>
+                          <button onClick={() => setDeleteBancoConfirm(b.id)} className="p-[4px] rounded-[4px] hover:bg-[#fee2e2] transition-colors" title="Eliminar">
+                            <svg fill="none" height="14" viewBox="0 0 14 14" width="14"><path d="M2 4H12M5 4V2H9V4M6 6.5V10.5M8 6.5V10.5M3 4L4 12H10L11 4" stroke="#ef4444" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         )}
 
@@ -859,6 +952,27 @@ export default function Caja() {
         </div>
       )}
 
+      {/* Modal Banco */}
+      {showBancoModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowBancoModal(false)}>
+          <div className="bg-white rounded-[12px] w-[400px]" style={{ border: "1px solid #e2e8f0" }} onClick={(e) => e.stopPropagation()}>
+            <div className="px-[24px] py-[20px]" style={{ borderBottom: "1px solid #e2e8f0" }}>
+              <p className="font-['Geist:Bold',sans-serif] font-bold text-[#0f172a] text-[18px]">{editingBanco ? "Editar Banco" : "Nuevo Banco"}</p>
+            </div>
+            <div className="px-[24px] py-[20px] flex flex-col gap-[16px]">
+              <div>
+                <label className="font-['Geist:Medium',sans-serif] font-medium text-[#475569] text-[13px] mb-[6px] block">Nombre</label>
+                <input type="text" value={bancoForm.nombre} onChange={(e) => setBancoForm((p) => ({ ...p, nombre: e.target.value }))} placeholder="Ej: Banco Galicia" className="w-full font-['Geist:Regular',sans-serif] text-[14px] text-[#0f172a] px-[12px] py-[9px] rounded-[8px] outline-none border border-[#e2e8f0] focus:border-[#0ea5e9] transition-colors bg-white" />
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-[12px] px-[24px] py-[20px]" style={{ borderTop: "1px solid #e2e8f0" }}>
+              <button onClick={() => setShowBancoModal(false)} className="font-['Geist:Medium',sans-serif] font-medium text-[14px] text-[#475569] px-[16px] py-[10px] rounded-[8px] hover:bg-[#f1f5f9] transition-colors">Cancelar</button>
+              <button onClick={handleGuardarBanco} className="font-['Geist:SemiBold',sans-serif] font-semibold text-[14px] text-white bg-[#0ea5e9] hover:bg-[#0284c7] transition-colors px-[16px] py-[10px] rounded-[8px]">{editingBanco ? "Guardar Cambios" : "Crear Banco"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal Confirmar Eliminación Caja */}
       {deleteCajaConfirm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setDeleteCajaConfirm(null)}>
@@ -868,6 +982,19 @@ export default function Caja() {
             <div className="flex items-center justify-end gap-[12px]">
               <button onClick={() => setDeleteCajaConfirm(null)} className="font-['Geist:Medium',sans-serif] font-medium text-[14px] text-[#475569] px-[16px] py-[10px] rounded-[8px] hover:bg-[#f1f5f9] transition-colors">Cancelar</button>
               <button onClick={() => handleEliminarCaja(deleteCajaConfirm)} className="font-['Geist:SemiBold',sans-serif] font-semibold text-[14px] text-white bg-[#ef4444] hover:bg-[#dc2626] transition-colors px-[16px] py-[10px] rounded-[8px]">Eliminar</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Modal Confirmar Eliminación Banco */}
+      {deleteBancoConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setDeleteBancoConfirm(null)}>
+          <div className="bg-white rounded-[12px] w-[400px] p-[24px]" style={{ border: "1px solid #e2e8f0" }} onClick={(e) => e.stopPropagation()}>
+            <p className="font-['Geist:Bold',sans-serif] font-bold text-[#0f172a] text-[16px] mb-[8px]">Eliminar Banco</p>
+            <p className="font-['Geist:Regular',sans-serif] text-[#475569] text-[14px] mb-[20px]">¿Estás seguro? Si el banco tiene cheques asociados, no se podrá eliminar.</p>
+            <div className="flex items-center justify-end gap-[12px]">
+              <button onClick={() => setDeleteBancoConfirm(null)} className="font-['Geist:Medium',sans-serif] font-medium text-[14px] text-[#475569] px-[16px] py-[10px] rounded-[8px] hover:bg-[#f1f5f9] transition-colors">Cancelar</button>
+              <button onClick={() => handleEliminarBanco(deleteBancoConfirm)} className="font-['Geist:SemiBold',sans-serif] font-semibold text-[14px] text-white bg-[#ef4444] hover:bg-[#dc2626] transition-colors px-[16px] py-[10px] rounded-[8px]">Eliminar</button>
             </div>
           </div>
         </div>
