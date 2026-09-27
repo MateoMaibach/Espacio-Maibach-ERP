@@ -304,3 +304,121 @@ export function updateBanco(id: string, data: { nombre?: string }) {
 export function deleteBanco(id: string) {
   return request<{ ok: true }>(`/bancos/${id}`, { method: "DELETE" });
 }
+
+// --- Calendario: Equipos ---
+export interface Equipo {
+  id: string;
+  nombre: string;
+  encargado: string;
+  empleados: string[];
+  createdAt: Date;
+}
+
+export function getEquipos() {
+  return request<Equipo[]>("/equipos");
+}
+
+export function createEquipo(data: { nombre: string; encargado: string; empleados?: string[] }) {
+  return request<{ ok: true; id: string }>("/equipos", { method: "POST", body: JSON.stringify(data) });
+}
+
+export function updateEquipo(id: string, data: { nombre?: string; encargado?: string; empleados?: string[] }) {
+  return request<{ ok: true }>(`/equipos/${id}`, { method: "PUT", body: JSON.stringify(data) });
+}
+
+export function deleteEquipo(id: string) {
+  return request<{ ok: true }>(`/equipos/${id}`, { method: "DELETE" });
+}
+
+// --- Calendario: Instalaciones ---
+export type InstalacionEstado = "Pendiente" | "Confirmada" | "En Proceso" | "Completada";
+export type VeredaEstado = "Pendiente" | "En Proceso" | "Completada";
+
+export interface Instalacion {
+  id: string;
+  ficheroId: string;
+  fecha: string;
+  equipoId: string | null;
+  estado: InstalacionEstado;
+  notas: string | null;
+  createdAt: Date;
+  clienteId: string;
+  clienteNombre: string;
+  clienteDireccion: string | null;
+  ficheroItems: { desc?: string; cant?: string; precio?: string; precioUnitario?: string }[];
+  ficheroTotal: string;
+  ficheroFecha: string;
+  equipoNombre: string | null;
+  equipoEncargado: string | null;
+}
+
+export interface Vereda {
+  id: string;
+  clienteId: string;
+  fecha: string;
+  equipoId: string | null;
+  estado: VeredaEstado;
+  notas: string | null;
+  createdAt: Date;
+  clienteNombre: string;
+  clienteDireccion: string | null;
+  equipoNombre: string | null;
+  equipoEncargado: string | null;
+}
+
+export interface VentaDisponible {
+  ficheroId: string;
+  clienteId: string;
+  clienteNombre: string;
+  clienteDireccion: string | null;
+  fechaVenta: string;
+  items: { desc?: string; cant?: string; precio?: string; precioUnitario?: string }[];
+  total: string;
+  estado: string;
+  instalacionId: string | null;
+}
+
+function rangoParams(desde?: string, hasta?: string) {
+  const params = new URLSearchParams();
+  if (desde) params.set("desde", desde);
+  if (hasta) params.set("hasta", hasta);
+  const q = params.toString();
+  return q ? `?${q}` : "";
+}
+
+export function getInstalaciones(desde?: string, hasta?: string) {
+  return request<Instalacion[]>(`/instalaciones${rangoParams(desde, hasta)}`);
+}
+
+export function getVentasParaInstalacion() {
+  return request<VentaDisponible[]>("/instalaciones/ventas");
+}
+
+export function createInstalacion(data: { ficheroId: string; fecha: string; equipoId?: string | null; estado?: InstalacionEstado; notas?: string }) {
+  return request<{ ok: true; id: string }>("/instalaciones", { method: "POST", body: JSON.stringify(data) });
+}
+
+export function updateInstalacion(id: string, data: Partial<{ ficheroId: string; fecha: string; equipoId: string | null; estado: InstalacionEstado; notas: string }>) {
+  return request<{ ok: true }>(`/instalaciones/${id}`, { method: "PUT", body: JSON.stringify(data) });
+}
+
+export function deleteInstalacion(id: string) {
+  return request<{ ok: true }>(`/instalaciones/${id}`, { method: "DELETE" });
+}
+
+// --- Calendario: Veredas ---
+export function getVeredas(desde?: string, hasta?: string) {
+  return request<Vereda[]>(`/veredas${rangoParams(desde, hasta)}`);
+}
+
+export function createVereda(data: { clienteId: string; fecha: string; equipoId?: string | null; estado?: VeredaEstado; notas?: string }) {
+  return request<{ ok: true; id: string }>("/veredas", { method: "POST", body: JSON.stringify(data) });
+}
+
+export function updateVereda(id: string, data: Partial<{ clienteId: string; fecha: string; equipoId: string | null; estado: VeredaEstado; notas: string }>) {
+  return request<{ ok: true }>(`/veredas/${id}`, { method: "PUT", body: JSON.stringify(data) });
+}
+
+export function deleteVereda(id: string) {
+  return request<{ ok: true }>(`/veredas/${id}`, { method: "DELETE" });
+}
