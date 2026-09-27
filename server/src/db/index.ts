@@ -82,6 +82,34 @@ sqlite.exec(`
     proveedor_id TEXT,
     created_at INTEGER NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS equipos (
+    id TEXT PRIMARY KEY,
+    nombre TEXT NOT NULL,
+    encargado TEXT NOT NULL,
+    empleados TEXT NOT NULL DEFAULT '[]',
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS instalaciones (
+    id TEXT PRIMARY KEY,
+    fichero_id TEXT NOT NULL REFERENCES ficheros(id) ON DELETE CASCADE,
+    fecha TEXT NOT NULL,
+    equipo_id TEXT REFERENCES equipos(id) ON DELETE SET NULL,
+    estado TEXT NOT NULL DEFAULT 'Pendiente',
+    notas TEXT,
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS veredas (
+    id TEXT PRIMARY KEY,
+    cliente_id TEXT NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
+    fecha TEXT NOT NULL,
+    equipo_id TEXT REFERENCES equipos(id) ON DELETE SET NULL,
+    estado TEXT NOT NULL DEFAULT 'Pendiente',
+    notas TEXT,
+    created_at INTEGER NOT NULL
+  );
 `);
 
 // Migration: add pago a proveedor columns to cheques if missing

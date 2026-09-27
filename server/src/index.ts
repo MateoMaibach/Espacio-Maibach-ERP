@@ -9,6 +9,9 @@ import cajaRouter from "./routes/caja.js";
 import cajasRouter from "./routes/cajas.js";
 import chequesRouter from "./routes/cheques.js";
 import bancosRouter from "./routes/bancos.js";
+import equiposRouter from "./routes/equipos.js";
+import instalacionesRouter from "./routes/instalaciones.js";
+import veredasRouter from "./routes/veredas.js";
 
 config({ path: resolve(import.meta.dirname, "../.env") });
 
@@ -25,6 +28,9 @@ app.use("/api/caja", cajaRouter);
 app.use("/api/cajas", cajasRouter);
 app.use("/api/cheques", chequesRouter);
 app.use("/api/bancos", bancosRouter);
+app.use("/api/equipos", equiposRouter);
+app.use("/api/instalaciones", instalacionesRouter);
+app.use("/api/veredas", veredasRouter);
 
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok" });

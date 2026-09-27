@@ -95,6 +95,34 @@ export const bancos = sqliteTable("bancos", {
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
 
+export const equipos = sqliteTable("equipos", {
+  id: text("id").primaryKey(),
+  nombre: text("nombre").notNull(),
+  encargado: text("encargado").notNull(),
+  empleados: text("empleados").notNull().default("[]"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+});
+
+export const instalaciones = sqliteTable("instalaciones", {
+  id: text("id").primaryKey(),
+  ficheroId: text("fichero_id").notNull().references(() => ficheros.id, { onDelete: "cascade" }),
+  fecha: text("fecha").notNull(),
+  equipoId: text("equipo_id").references(() => equipos.id, { onDelete: "set null" }),
+  estado: text("estado").notNull().default("Pendiente"),
+  notas: text("notas"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+});
+
+export const veredas = sqliteTable("veredas", {
+  id: text("id").primaryKey(),
+  clienteId: text("cliente_id").notNull().references(() => clientes.id, { onDelete: "cascade" }),
+  fecha: text("fecha").notNull(),
+  equipoId: text("equipo_id").references(() => equipos.id, { onDelete: "set null" }),
+  estado: text("estado").notNull().default("Pendiente"),
+  notas: text("notas"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+});
+
 export const cheques = sqliteTable("cheques", {
   id: text("id").primaryKey(),
   tipo: text("tipo").notNull(),
