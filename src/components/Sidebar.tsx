@@ -1,5 +1,16 @@
 import { useNavigate, useLocation } from "react-router-dom";
-import { IconDroplets, IconDashboard, IconUsers, IconWallet, IconCreditCard, IconCalendar, IconTruck, IconPackage, IconTrendingUp, IconSettings } from "./Icons";
+import {
+  IconDroplets,
+  IconDashboard,
+  IconUsers,
+  IconWallet,
+  IconCreditCard,
+  IconCalendar,
+  IconTruck,
+  IconPackage,
+  IconTrendingUp,
+  IconSettings,
+} from "./Icons";
 
 const navItems = [
   { label: "Dashboard", path: "/", icon: IconDashboard },
@@ -27,8 +38,12 @@ export default function Sidebar() {
             <IconDroplets />
           </div>
           <div className="flex flex-col gap-[2px]">
-            <p className="font-['Geist:Bold',sans-serif] font-bold text-[#0f172a] text-[16px]">Espacio Maibach</p>
-            <p className="font-['Geist:Medium',sans-serif] font-medium text-[#94a3b8] text-[11px] tracking-[1px] uppercase">Piletas de Fibra</p>
+            <p className="font-['Geist:Bold',sans-serif] font-bold text-[#0f172a] text-[16px]">
+              Espacio Maibach
+            </p>
+            <p className="font-['Geist:Medium',sans-serif] font-medium text-[#94a3b8] text-[11px] tracking-[1px] uppercase">
+              Piletas de Fibra
+            </p>
           </div>
         </div>
         <div className="h-px bg-[#e2e8f0] w-full" />
@@ -46,9 +61,13 @@ export default function Sidebar() {
                 }`}
               >
                 <Icon color={isActive ? "#0EA5E9" : "#475569"} />
-                <p className={`font-['Geist:Medium',sans-serif] font-medium text-[14px] ${
-                  isActive ? "font-['Geist:SemiBold',sans-serif] font-semibold text-[#0ea5e9]" : "text-[#475569]"
-                }`}>
+                <p
+                  className={`font-['Geist:Medium',sans-serif] font-medium text-[14px] ${
+                    isActive
+                      ? "font-['Geist:SemiBold',sans-serif] font-semibold text-[#0ea5e9]"
+                      : "text-[#475569]"
+                  }`}
+                >
                   {item.label}
                 </p>
               </button>
@@ -60,7 +79,9 @@ export default function Sidebar() {
       <div className="flex flex-col items-start w-full">
         <div className="h-px bg-[#e2e8f0] w-full" />
         <div className="flex items-center justify-between px-[24px] py-[16px] w-full">
-          <p className="font-['Geist:Medium',sans-serif] font-medium text-[#475569] text-[13px]">Modo Claro</p>
+          <p className="font-['Geist:Medium',sans-serif] font-medium text-[#475569] text-[13px]">
+            Modo Claro
+          </p>
           <div className="h-[20px] w-[38px] relative">
             <svg className="block size-full" fill="none" height="20" viewBox="0 0 38 20" width="38">
               <rect fill="#E0F2FE" height="20" rx="10" width="38" />
@@ -70,11 +91,17 @@ export default function Sidebar() {
         </div>
         <div className="flex gap-[12px] items-center bg-[#f8fafc] px-[24px] py-[20px] w-full">
           <div className="bg-[#e2e8f0] rounded-full size-[40px] flex items-center justify-center">
-            <span className="font-['Geist:Bold',sans-serif] font-bold text-[#475569] text-[14px]">MM</span>
+            <span className="font-['Geist:Bold',sans-serif] font-bold text-[#475569] text-[14px]">
+              MM
+            </span>
           </div>
           <div className="flex flex-col gap-[2px] flex-1 min-w-0">
-            <p className="font-['Geist:SemiBold',sans-serif] font-semibold text-[#0f172a] text-[14px] truncate">Martín Maibach</p>
-            <p className="font-['Geist:Regular',sans-serif] font-normal text-[#94a3b8] text-[12px]">Administrador</p>
+            <p className="font-['Geist:SemiBold',sans-serif] font-semibold text-[#0f172a] text-[14px] truncate">
+              Martín Maibach
+            </p>
+            <p className="font-['Geist:Regular',sans-serif] font-normal text-[#94a3b8] text-[12px]">
+              Administrador
+            </p>
           </div>
         </div>
       </div>

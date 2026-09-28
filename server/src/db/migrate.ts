@@ -1,7 +1,7 @@
-import { db, sqlite } from "./index.js";
+import { db, sqlite } from "./index.js"
 
 async function migrate() {
-  console.log("Creando tablas...");
+  console.log("Creando tablas...")
 
   db.run(/*sql*/ `
     CREATE TABLE IF NOT EXISTS clientes (
@@ -20,7 +20,7 @@ async function migrate() {
       fecha_alta TEXT NOT NULL,
       created_at INTEGER NOT NULL
     )
-  `);
+  `)
 
   db.run(/*sql*/ `
     CREATE TABLE IF NOT EXISTS ficheros (
@@ -38,14 +38,22 @@ async function migrate() {
       estado TEXT NOT NULL DEFAULT 'pendiente',
       created_at INTEGER NOT NULL
     )
-  `);
+  `)
 
   // Migración para DBs existentes
-  const columns = sqlite.prepare("PRAGMA table_info(ficheros)").all() as { name: string }[];
-  const hasPagoInicial = columns.some((c) => c.name === "pago_inicial");
+
+  const columns = sqlite.prepare("PRAGMA table_info(ficheros)").all() as {
+    name: string
+  }[]
+
+  const hasPagoInicial = columns.some((c) => c.name === "pago_inicial")
+
   if (!hasPagoInicial) {
-    console.log("Agregando columna pago_inicial...");
-    db.run("ALTER TABLE ficheros ADD COLUMN pago_inicial INTEGER NOT NULL DEFAULT 0");
+    console.log("Agregando columna pago_inicial...")
+
+    db.run(
+      "ALTER TABLE ficheros ADD COLUMN pago_inicial INTEGER NOT NULL DEFAULT 0",
+    )
   }
 
   db.run(/*sql*/ `
@@ -64,7 +72,7 @@ async function migrate() {
       descripcion TEXT,
       created_at INTEGER NOT NULL
     )
-  `);
+  `)
 
   db.run(/*sql*/ `
     CREATE TABLE IF NOT EXISTS bancos (
@@ -72,7 +80,7 @@ async function migrate() {
       nombre TEXT NOT NULL UNIQUE,
       created_at INTEGER NOT NULL
     )
-  `);
+  `)
 
   db.run(/*sql*/ `
     CREATE TABLE IF NOT EXISTS cheques (
@@ -96,13 +104,20 @@ async function migrate() {
       proveedor_id TEXT,
       created_at INTEGER NOT NULL
     )
-  `);
+  `)
 
-  const chequesCols = sqlite.prepare("PRAGMA table_info(cheques)").all() as { name: string }[];
+  const chequesCols = sqlite.prepare("PRAGMA table_info(cheques)").all() as {
+    name: string
+  }[]
+
   if (!chequesCols.some((c) => c.name === "aplica_pago_proveedor")) {
-    console.log("Agregando columnas de pago a proveedor a cheques...");
-    db.run("ALTER TABLE cheques ADD COLUMN aplica_pago_proveedor INTEGER NOT NULL DEFAULT 0");
-    db.run("ALTER TABLE cheques ADD COLUMN proveedor_id TEXT");
+    console.log("Agregando columnas de pago a proveedor a cheques...")
+
+    db.run(
+      "ALTER TABLE cheques ADD COLUMN aplica_pago_proveedor INTEGER NOT NULL DEFAULT 0",
+    )
+
+    db.run("ALTER TABLE cheques ADD COLUMN proveedor_id TEXT")
   }
 
   db.run(/*sql*/ `
@@ -113,7 +128,7 @@ async function migrate() {
       empleados TEXT NOT NULL DEFAULT '[]',
       created_at INTEGER NOT NULL
     )
-  `);
+  `)
 
   db.run(/*sql*/ `
     CREATE TABLE IF NOT EXISTS instalaciones (
@@ -125,7 +140,7 @@ async function migrate() {
       notas TEXT,
       created_at INTEGER NOT NULL
     )
-  `);
+  `)
 
   db.run(/*sql*/ `
     CREATE TABLE IF NOT EXISTS veredas (
@@ -137,9 +152,60 @@ async function migrate() {
       notas TEXT,
       created_at INTEGER NOT NULL
     )
-  `);
+  `)
 
-  console.log("Tablas creadas correctamente.");
+  db.run(/*sql*/ `
+    CREATE TABLE IF NOT EXISTS proveedores (
+      id TEXT PRIMARY KEY,
+      razon_social TEXT NOT NULL,
+      cuit TEXT,
+      contacto TEXT,
+      email TEXT,
+      telefono TEXT,
+      direccion TEXT,
+      localidad TEXT,
+      rubro TEXT,
+      estado TEXT NOT NULL DEFAULT 'Activo',
+      cbu TEXT,
+      alias TEXT,
+      notas TEXT,
+      created_at INTEGER NOT NULL
+    )
+  `)
+
+  db.run(/*sql*/ `
+    CREATE TABLE IF NOT EXISTS compras (
+      id TEXT PRIMARY KEY,
+      proveedor_id TEXT NOT NULL REFERENCES proveedores(id) ON DELETE CASCADE,
+      fecha TEXT NOT NULL,
+      descripcion TEXT,
+      moneda TEXT NOT NULL DEFAULT 'ARS',
+      tipo_cambio INTEGER,
+      total INTEGER NOT NULL DEFAULT 0,
+      items TEXT NOT NULL DEFAULT '[]',
+      estado TEXT NOT NULL DEFAULT 'Pendiente',
+      observaciones TEXT,
+      created_at INTEGER NOT NULL
+    )
+  `)
+
+  db.run(/*sql*/ `
+    CREATE TABLE IF NOT EXISTS ordenes_pago (
+      id TEXT PRIMARY KEY,
+      numero INTEGER NOT NULL,
+      proveedor_id TEXT NOT NULL REFERENCES proveedores(id) ON DELETE RESTRICT,
+      fecha TEXT NOT NULL,
+      concepto TEXT NOT NULL,
+      estado TEXT NOT NULL DEFAULT 'Pagada',
+      detalles TEXT NOT NULL DEFAULT '[]',
+      compras_pagadas TEXT NOT NULL DEFAULT '[]',
+      movimiento_ids TEXT NOT NULL DEFAULT '[]',
+      observaciones TEXT,
+      created_at INTEGER NOT NULL
+    )
+  `)
+
+  console.log("Tablas creadas correctamente.")
 }
 
-migrate().catch(console.error);
+migrate().catch(console.error)

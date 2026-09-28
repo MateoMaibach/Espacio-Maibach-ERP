@@ -2,46 +2,68 @@ import { useState, useEffect, useRef } from "react";
 
 export interface ClienteOption {
   id: string;
+
   nombre: string;
 }
 
 interface Props {
   clientes: ClienteOption[];
+
   value: string;
+
   onChange: (id: string) => void;
+
   placeholder?: string;
+
   inputClass?: string;
 }
 
-export default function ClienteSelector({ clientes, value, onChange, placeholder = "Buscar cliente por nombre o apellido...", inputClass }: Props) {
+export default function ClienteSelector({
+  clientes,
+  value,
+  onChange,
+  placeholder = "Buscar cliente por nombre o apellido...",
+  inputClass,
+}: Props) {
   const [open, setOpen] = useState(false);
+
   const [query, setQuery] = useState("");
+
   const containerRef = useRef<HTMLDivElement>(null);
 
   const selected = clientes.find((c) => c.id === value) || null;
+
   const q = query.trim().toLowerCase();
+
   const filtered = q ? clientes.filter((c) => c.nombre.toLowerCase().includes(q)) : clientes;
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setOpen(false);
+
         setQuery("");
       }
     }
+
     document.addEventListener("mousedown", handleClick);
+
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
   function seleccionar(id: string) {
     onChange(id);
+
     setOpen(false);
+
     setQuery("");
   }
 
   function limpiar() {
     onChange("");
+
     setOpen(false);
+
     setQuery("");
   }
 
@@ -53,6 +75,7 @@ export default function ClienteSelector({ clientes, value, onChange, placeholder
         onFocus={() => setOpen(true)}
         onChange={(e) => {
           setQuery(e.target.value);
+
           setOpen(true);
         }}
         placeholder={selected ? selected.nombre : placeholder}
@@ -74,6 +97,7 @@ export default function ClienteSelector({ clientes, value, onChange, placeholder
             type="button"
             onMouseDown={(e) => {
               e.preventDefault();
+
               limpiar();
             }}
             className="w-full text-left px-[12px] py-[9px] font-['Geist:Regular',sans-serif] text-[14px] text-[#94a3b8] hover:bg-[#f8fafc] transition-colors"
@@ -86,6 +110,7 @@ export default function ClienteSelector({ clientes, value, onChange, placeholder
               type="button"
               onMouseDown={(e) => {
                 e.preventDefault();
+
                 seleccionar(c.id);
               }}
               className={`w-full text-left px-[12px] py-[9px] font-['Geist:Regular',sans-serif] text-[14px] transition-colors hover:bg-[#f1f5f9] ${
@@ -96,7 +121,9 @@ export default function ClienteSelector({ clientes, value, onChange, placeholder
             </button>
           ))}
           {filtered.length === 0 && (
-            <p className="px-[12px] py-[9px] font-['Geist:Regular',sans-serif] text-[13px] text-[#94a3b8]">Sin resultados para "{query}"</p>
+            <p className="px-[12px] py-[9px] font-['Geist:Regular',sans-serif] text-[13px] text-[#94a3b8]">
+              Sin resultados para "{query}"
+            </p>
           )}
         </div>
       )}

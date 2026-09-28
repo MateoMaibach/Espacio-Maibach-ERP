@@ -1,11 +1,15 @@
-import { Router } from "express";
-import * as cajasController from "../controllers/cajas.controller.js";
+import { Router } from "express"
 
-const router = Router();
+import * as cajasController from "../controllers/cajas.controller.js"
 
-router.get("/", cajasController.getAll);
-router.post("/", cajasController.create);
-router.put("/:id", cajasController.update);
-router.delete("/:id", cajasController.remove);
+const router = Router()
 
-export default router;
+router.get("/", cajasController.getAll)
+
+router.post("/", cajasController.create)
+
+router.put("/:id", cajasController.update)
+
+router.delete("/:id", cajasController.remove)
+
+export default router

@@ -1,18 +1,30 @@
-import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
-import * as schema from "./schema.js";
-import { config } from "dotenv";
-import { resolve } from "path";
+import Database from "better-sqlite3"
 
-config({ path: resolve(import.meta.dirname, "../../.env") });
+import { drizzle } from "drizzle-orm/better-sqlite3"
 
-const dbPath = resolve(import.meta.dirname, "../..", process.env.DATABASE_URL || "./data/espacio.db");
-const sqlite = new Database(dbPath);
-sqlite.pragma("journal_mode = WAL");
-sqlite.pragma("foreign_keys = ON");
+import * as schema from "./schema.js"
 
-export const db = drizzle(sqlite, { schema });
-export { sqlite };
+import { config } from "dotenv"
+
+import { resolve } from "path"
+
+config({ path: resolve(import.meta.dirname, "../../.env") })
+
+const dbPath = resolve(
+  import.meta.dirname,
+  "../..",
+  process.env.DATABASE_URL || "./data/espacio.db",
+)
+
+const sqlite = new Database(dbPath)
+
+sqlite.pragma("journal_mode = WAL")
+
+sqlite.pragma("foreign_keys = ON")
+
+export const db = drizzle(sqlite, { schema })
+
+export { sqlite }
 
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS cajas (
@@ -110,37 +122,103 @@ sqlite.exec(`
     notas TEXT,
     created_at INTEGER NOT NULL
   );
-`);
+
+  CREATE TABLE IF NOT EXISTS proveedores (
+    id TEXT PRIMARY KEY,
+    razon_social TEXT NOT NULL,
+    cuit TEXT,
+    contacto TEXT,
+    email TEXT,
+    telefono TEXT,
+    direccion TEXT,
+    localidad TEXT,
+    rubro TEXT,
+    estado TEXT NOT NULL DEFAULT 'Activo',
+    cbu TEXT,
+    alias TEXT,
+    notas TEXT,
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS compras (
+    id TEXT PRIMARY KEY,
+    proveedor_id TEXT NOT NULL REFERENCES proveedores(id) ON DELETE CASCADE,
+    fecha TEXT NOT NULL,
+    descripcion TEXT,
+    moneda TEXT NOT NULL DEFAULT 'ARS',
+    tipo_cambio INTEGER,
+    total INTEGER NOT NULL DEFAULT 0,
+    items TEXT NOT NULL DEFAULT '[]',
+    estado TEXT NOT NULL DEFAULT 'Pendiente',
+    observaciones TEXT,
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS ordenes_pago (
+    id TEXT PRIMARY KEY,
+    numero INTEGER NOT NULL,
+    proveedor_id TEXT NOT NULL REFERENCES proveedores(id) ON DELETE RESTRICT,
+    fecha TEXT NOT NULL,
+    concepto TEXT NOT NULL,
+    estado TEXT NOT NULL DEFAULT 'Pagada',
+    detalles TEXT NOT NULL DEFAULT '[]',
+    compras_pagadas TEXT NOT NULL DEFAULT '[]',
+    movimiento_ids TEXT NOT NULL DEFAULT '[]',
+    observaciones TEXT,
+    created_at INTEGER NOT NULL
+  );
+`)
 
 // Migration: add pago a proveedor columns to cheques if missing
+
 try {
-  sqlite.prepare("SELECT aplica_pago_proveedor FROM cheques LIMIT 1").get();
+  sqlite.prepare("SELECT aplica_pago_proveedor FROM cheques LIMIT 1").get()
 } catch {
-  sqlite.exec("ALTER TABLE cheques ADD COLUMN aplica_pago_proveedor INTEGER NOT NULL DEFAULT 0");
-  sqlite.exec("ALTER TABLE cheques ADD COLUMN proveedor_id TEXT");
+  sqlite.exec(
+    "ALTER TABLE cheques ADD COLUMN aplica_pago_proveedor INTEGER NOT NULL DEFAULT 0",
+  )
+
+  sqlite.exec("ALTER TABLE cheques ADD COLUMN proveedor_id TEXT")
 }
 
-const cajasCount = sqlite.prepare("SELECT COUNT(*) as count FROM cajas").get() as { count: number };
+const cajasCount = sqlite
+  .prepare("SELECT COUNT(*) as count FROM cajas")
+  .get() as { count: number }
+
 if (cajasCount.count === 0) {
-  const now = Date.now();
-  const insertCaja = sqlite.prepare("INSERT INTO cajas (id, nombre, color, orden, activa, afecta_general, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)");
-  insertCaja.run("caj_1", "Efectivo", "#3b82f6", 1, 1, 1, now);
-  insertCaja.run("caj_2", "Bancos", "#7c3aed", 2, 1, 1, now);
-  insertCaja.run("caj_3", "Cheques", "#f59e0b", 3, 1, 1, now);
-  insertCaja.run("caj_4", "Dólares", "#10b981", 4, 1, 0, now);
+  const now = Date.now()
+
+  const insertCaja = sqlite.prepare(
+    "INSERT INTO cajas (id, nombre, color, orden, activa, afecta_general, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+  )
+
+  insertCaja.run("caj_1", "Efectivo", "#3b82f6", 1, 1, 1, now)
+
+  insertCaja.run("caj_2", "Bancos", "#7c3aed", 2, 1, 1, now)
+
+  insertCaja.run("caj_3", "Cheques", "#f59e0b", 3, 1, 1, now)
+
+  insertCaja.run("caj_4", "Dólares", "#10b981", 4, 1, 0, now)
 }
 
 // Migration: add afecta_general column if missing
+
 try {
-  sqlite.prepare("SELECT afecta_general FROM cajas LIMIT 1").get();
+  sqlite.prepare("SELECT afecta_general FROM cajas LIMIT 1").get()
 } catch {
-  sqlite.exec("ALTER TABLE cajas ADD COLUMN afecta_general INTEGER NOT NULL DEFAULT 1");
-  sqlite.prepare("UPDATE cajas SET afecta_general = 0 WHERE nombre = 'Dólares'").run();
+  sqlite.exec(
+    "ALTER TABLE cajas ADD COLUMN afecta_general INTEGER NOT NULL DEFAULT 1",
+  )
+
+  sqlite
+    .prepare("UPDATE cajas SET afecta_general = 0 WHERE nombre = 'Dólares'")
+    .run()
 }
 
 // Migration: add fecha column to cierres if missing
+
 try {
-  sqlite.prepare("SELECT fecha FROM cierres LIMIT 1").get();
+  sqlite.prepare("SELECT fecha FROM cierres LIMIT 1").get()
 } catch {
-  sqlite.exec("ALTER TABLE cierres ADD COLUMN fecha TEXT NOT NULL DEFAULT ''");
+  sqlite.exec("ALTER TABLE cierres ADD COLUMN fecha TEXT NOT NULL DEFAULT ''")
 }
