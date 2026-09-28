@@ -1,9 +1,11 @@
-import { Router } from "express";
-import * as controller from "../controllers/ficheros.controller.js";
+import { Router } from "express"
 
-const router = Router();
+import * as controller from "../controllers/ficheros.controller.js"
 
-router.post("/clientes/:id/fichero", controller.upsert);
-router.delete("/clientes/:id/fichero", controller.remove);
+const router = Router()
 
-export default router;
+router.post("/clientes/:id/fichero", controller.upsert)
+
+router.delete("/clientes/:id/fichero", controller.remove)
+
+export default router

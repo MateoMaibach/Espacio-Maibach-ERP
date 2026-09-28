@@ -1,11 +1,15 @@
-import { Router } from "express";
-import * as bancosController from "../controllers/bancos.controller.js";
+import { Router } from "express"
 
-const router = Router();
+import * as bancosController from "../controllers/bancos.controller.js"
 
-router.get("/", bancosController.getAll);
-router.post("/", bancosController.create);
-router.put("/:id", bancosController.update);
-router.delete("/:id", bancosController.remove);
+const router = Router()
 
-export default router;
+router.get("/", bancosController.getAll)
+
+router.post("/", bancosController.create)
+
+router.put("/:id", bancosController.update)
+
+router.delete("/:id", bancosController.remove)
+
+export default router

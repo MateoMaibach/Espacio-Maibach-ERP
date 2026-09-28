@@ -1,11 +1,15 @@
-import { Router } from "express";
-import * as controller from "../controllers/veredas.controller.js";
+import { Router } from "express"
 
-const router = Router();
+import * as controller from "../controllers/veredas.controller.js"
 
-router.get("/", controller.getAll);
-router.post("/", controller.create);
-router.put("/:id", controller.update);
-router.delete("/:id", controller.remove);
+const router = Router()
 
-export default router;
+router.get("/", controller.getAll)
+
+router.post("/", controller.create)
+
+router.put("/:id", controller.update)
+
+router.delete("/:id", controller.remove)
+
+export default router

@@ -1,12 +1,17 @@
-import { Router } from "express";
-import * as controller from "../controllers/equipos.controller.js";
+import { Router } from "express"
 
-const router = Router();
+import * as controller from "../controllers/equipos.controller.js"
 
-router.get("/", controller.getAll);
-router.get("/:id", controller.getById);
-router.post("/", controller.create);
-router.put("/:id", controller.update);
-router.delete("/:id", controller.remove);
+const router = Router()
 
-export default router;
+router.get("/", controller.getAll)
+
+router.get("/:id", controller.getById)
+
+router.post("/", controller.create)
+
+router.put("/:id", controller.update)
+
+router.delete("/:id", controller.remove)
+
+export default router

@@ -17,9 +17,7 @@ export default function AppLayout({ children, breadcrumbs }: AppLayoutProps) {
       <Sidebar />
       <div className="flex flex-col flex-1 min-w-0 self-stretch">
         <Header breadcrumbs={breadcrumbs} />
-        <div className="flex-1 overflow-auto">
-          {children}
-        </div>
+        <div className="flex-1 overflow-auto">{children}</div>
       </div>
     </div>
   );

@@ -1,13 +1,25 @@
-import { Router } from "express";
-import * as controller from "../controllers/cuotas.controller.js";
+import { Router } from "express"
 
-const router = Router();
+import * as controller from "../controllers/cuotas.controller.js"
 
-router.post("/clientes/:id/fichero/pago-inicial", controller.registrarPagoInicial);
-router.post("/clientes/:id/fichero/cuotas/generar", controller.generarPlan);
-router.post("/clientes/:id/fichero/cuotas", controller.agregarCargo);
-router.put("/clientes/:id/fichero/cuotas/:cuotaId", controller.editarCuota);
-router.post("/clientes/:id/fichero/cuotas/:cuotaId/cobrar", controller.registrarCobro);
-router.delete("/clientes/:id/fichero/cuotas/:cuotaId", controller.eliminarCuota);
+const router = Router()
 
-export default router;
+router.post(
+  "/clientes/:id/fichero/pago-inicial",
+  controller.registrarPagoInicial,
+)
+
+router.post("/clientes/:id/fichero/cuotas/generar", controller.generarPlan)
+
+router.post("/clientes/:id/fichero/cuotas", controller.agregarCargo)
+
+router.put("/clientes/:id/fichero/cuotas/:cuotaId", controller.editarCuota)
+
+router.post(
+  "/clientes/:id/fichero/cuotas/:cuotaId/cobrar",
+  controller.registrarCobro,
+)
+
+router.delete("/clientes/:id/fichero/cuotas/:cuotaId", controller.eliminarCuota)
+
+export default router
