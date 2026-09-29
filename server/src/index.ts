@@ -32,6 +32,14 @@ import comprasRouter from "./routes/compras.js"
 
 import ordenesPagoRouter from "./routes/ordenesPago.js"
 
+import depositosRouter from "./routes/depositos.js"
+
+import articulosRouter from "./routes/articulos.js"
+
+import stockRouter from "./routes/stock.js"
+
+import remitosRouter from "./routes/remitos.js"
+
 config({ path: resolve(import.meta.dirname, "../.env") })
 
 const app = express()
@@ -67,6 +75,14 @@ app.use("/api/proveedores", proveedoresRouter)
 app.use("/api/compras", comprasRouter)
 
 app.use("/api/ordenes-pago", ordenesPagoRouter)
+
+app.use("/api/depositos", depositosRouter)
+
+app.use("/api/articulos", articulosRouter)
+
+app.use("/api/stock", stockRouter)
+
+app.use("/api/remitos", remitosRouter)
 
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok" })

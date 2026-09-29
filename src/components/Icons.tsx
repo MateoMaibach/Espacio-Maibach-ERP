@@ -120,6 +120,20 @@ export function IconPackage({ color = "#475569" }: { color?: string }) {
   );
 }
 
+export function IconBox({ color = "#475569" }: { color?: string }) {
+  return (
+    <svg fill="none" height="20" viewBox="0 0 20 20" width="20">
+      <path
+        d="M17.5 5.8335L10 1.6665L2.5 5.8335V14.1665L10 18.3335L17.5 14.1665V5.8335ZM2.5 5.8335L10 10.0005L17.5 5.8335M10 10.0005V18.3335"
+        stroke={color}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+      />
+    </svg>
+  );
+}
+
 export function IconTrendingUp({ color = "#475569" }: { color?: string }) {
   return (
     <svg fill="none" height="20" viewBox="0 0 20 20" width="20">

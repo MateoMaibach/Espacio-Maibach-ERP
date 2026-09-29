@@ -836,6 +836,46 @@ export function deleteProveedor(id: string) {
 
 export type CompraEstado = "Pendiente" | "En Tránsito" | "Recibido";
 
+export type IngresoEstado = "Pendiente" | "Parcial" | "Recibido";
+
+export interface RecepcionLinea {
+  itemIndex: number;
+
+  articuloId: string;
+
+  articuloNombre: string;
+
+  cantidad: number;
+}
+
+export interface RecepcionCompra {
+  id: string;
+
+  fecha: string;
+
+  depositoId: string;
+
+  depositoNombre: string;
+
+  lineas: RecepcionLinea[];
+
+  movimientoIds: string[];
+}
+
+export interface PendienteItem {
+  itemIndex: number;
+
+  detalle: string | null;
+
+  cantidad: number;
+
+  recibido: number;
+
+  pendiente: number;
+
+  precioUnitario: number;
+}
+
 export interface CompraItem {
   detalle: string;
 
@@ -862,6 +902,10 @@ export interface Compra {
   items: CompraItem[] | string;
 
   estado: CompraEstado;
+
+  ingresoEstado: IngresoEstado;
+
+  recepciones: RecepcionCompra[] | string;
 
   observaciones: string | null;
 
@@ -905,6 +949,36 @@ export function updateCompra(id: string, data: Partial<CompraInput>) {
 
 export function deleteCompra(id: string) {
   return request<{ ok: true }>(`/compras/${id}`, { method: "DELETE" });
+}
+
+export function getRecepciones(compraId: string) {
+  return request<{
+    recepciones: RecepcionCompra[];
+    pendientes: PendienteItem[];
+    ingresoEstado: IngresoEstado;
+  }>(`/compras/${compraId}/recepciones`);
+}
+
+export function createRecepcion(
+  compraId: string,
+  data: {
+    depositoId: string;
+
+    fecha?: string;
+
+    lineas: { itemIndex: number; articuloId: string; cantidad: number }[];
+  },
+) {
+  return request<{
+    ok: true;
+    id: string;
+    movimientos: string[];
+    ingresoEstado: IngresoEstado;
+    pendientes: PendienteItem[];
+  }>(`/compras/${compraId}/recepciones`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
 }
 
 // --- Órdenes de Pago ---
@@ -990,6 +1064,417 @@ export function createOrdenPago(proveedorId: string, data: OrdenPagoInput) {
 
 export function anularOrdenPago(id: string) {
   return request<{ ok: true; movimientosEliminados: number }>(`/ordenes-pago/${id}/anular`, {
+    method: "POST",
+  });
+}
+
+// --- Depósitos ---
+
+export interface Deposito {
+  id: string;
+
+  nombre: string;
+
+  direccion: string | null;
+
+  activo: number;
+
+  createdAt: Date;
+
+  articulosConStock?: number;
+}
+
+export function getDepositos() {
+  return request<Deposito[]>("/depositos");
+}
+
+export function createDeposito(data: { nombre: string; direccion?: string }) {
+  return request<{ ok: true; id: string }>("/depositos", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateDeposito(
+  id: string,
+  data: Partial<{ nombre: string; direccion: string | null; activo: number }>,
+) {
+  return request<{ ok: true }>(`/depositos/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteDeposito(id: string) {
+  return request<{ ok: true }>(`/depositos/${id}`, { method: "DELETE" });
+}
+
+// --- Artículos ---
+
+export interface Articulo {
+  id: string;
+
+  codigo: string | null;
+
+  nombre: string;
+
+  unidad: string;
+
+  costoUnitario: number;
+
+  activo: number;
+
+  createdAt: Date;
+
+  depositos?: number;
+}
+
+export interface HistorialCosto {
+  id: string;
+
+  articuloId: string;
+
+  costo: number;
+
+  fecha: string;
+
+  origen: string;
+
+  referenciaId: string | null;
+
+  costoAnterior: number | null;
+
+  variacion: number | null;
+}
+
+export function getArticulos(params?: { q?: string; activo?: 0 | 1 }) {
+  const qs = new URLSearchParams();
+  if (params?.q) qs.set("q", params.q);
+  if (params?.activo !== undefined) qs.set("activo", String(params.activo));
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return request<Articulo[]>(`/articulos${suffix}`);
+}
+
+export function getArticulo(id: string) {
+  return request<Articulo>(`/articulos/${id}`);
+}
+
+export function createArticulo(data: {
+  codigo?: string;
+
+  nombre: string;
+
+  unidad?: string;
+
+  costoUnitario?: number;
+}) {
+  return request<{ ok: true; id: string }>("/articulos", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateArticulo(
+  id: string,
+  data: Partial<{
+    codigo: string | null;
+    nombre: string;
+    unidad: string;
+    costoUnitario: number;
+    activo: number;
+  }>,
+) {
+  return request<{ ok: true }>(`/articulos/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateCostoArticulo(id: string, costoUnitario: number) {
+  return request<{ ok: true; costo: number }>(`/articulos/${id}/costo`, {
+    method: "PUT",
+    body: JSON.stringify({ costoUnitario }),
+  });
+}
+
+export function getHistorialCostos(id: string) {
+  return request<{ articulo: Articulo; historial: HistorialCosto[] }>(
+    `/articulos/${id}/historial-costos`,
+  );
+}
+
+export function deleteArticulo(id: string) {
+  return request<{ ok: true }>(`/articulos/${id}`, { method: "DELETE" });
+}
+
+// --- Stock ---
+
+export interface Existencia {
+  id: string;
+
+  depositoId: string;
+
+  articuloId: string;
+
+  cantidad: number;
+
+  costoPromedio: number;
+
+  articuloNombre: string;
+
+  codigo: string | null;
+
+  unidad: string;
+
+  depositoNombre: string;
+
+  valor: number;
+}
+
+export interface MovimientoStock {
+  id: string;
+
+  fecha: string;
+
+  tipo: "ingreso" | "egreso" | "transferencia" | "ajuste";
+
+  articuloId: string;
+
+  depositoOrigenId: string | null;
+
+  depositoDestinoId: string | null;
+
+  cantidad: number;
+
+  costoUnitario: number;
+
+  referenciaTipo: string | null;
+
+  referenciaId: string | null;
+
+  motivo: string | null;
+
+  articuloNombre: string;
+
+  unidad: string;
+
+  depositoOrigen: string | null;
+
+  depositoDestino: string | null;
+
+  valor: number;
+
+  saldo: number | null;
+}
+
+export interface LineaMovimiento {
+  articuloId: string;
+
+  cantidad: number;
+
+  costoUnitario?: number;
+}
+
+export function getExistencias(params?: { depositoId?: string; articuloId?: string }) {
+  const qs = new URLSearchParams();
+  if (params?.depositoId) qs.set("depositoId", params.depositoId);
+  if (params?.articuloId) qs.set("articuloId", params.articuloId);
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return request<{
+    rows: Existencia[];
+    totalArticulos: number;
+    valorTotal: number;
+    conStockNegativo: number;
+  }>(`/stock${suffix}`);
+}
+
+export function getMovimientosStock(params?: {
+  desde?: string;
+
+  hasta?: string;
+
+  depositoId?: string;
+
+  articuloId?: string;
+
+  tipo?: string;
+}) {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(params ?? {})) {
+    if (v) qs.set(k, v);
+  }
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return request<MovimientoStock[]>(`/stock/movimientos${suffix}`);
+}
+
+export function createIngresoInicial(data: {
+  depositoId: string;
+
+  fecha?: string;
+
+  lineas: LineaMovimiento[];
+}) {
+  return request<{ ok: true; movimientos: string[] }>("/stock/ingresos-iniciales", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function createAjuste(data: {
+  depositoId: string;
+
+  fecha?: string;
+
+  motivo: string;
+
+  lineas: LineaMovimiento[];
+}) {
+  return request<{ ok: true; movimientos: string[] }>("/stock/ajustes", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function getReporteStockNegativo() {
+  return request<{
+    rows: (Existencia & { ultimoMovimiento: MovimientoStock | null })[];
+    totalUnidades: number;
+    valorTotal: number;
+  }>("/stock/reportes/negativos");
+}
+
+export function getReporteValorizacion(depositoId?: string) {
+  const suffix = depositoId ? `?depositoId=${depositoId}` : "";
+  return request<{
+    rows: (Existencia & { depositoNombre: string })[];
+    resumen: {
+      depositoId: string;
+      depositoNombre: string;
+      articulos: number;
+      valor: number;
+    }[];
+    total: number;
+  }>(`/stock/reportes/valorizacion${suffix}`);
+}
+
+export function getReporteCostos() {
+  return request<
+    (Articulo & {
+      costoActual: number;
+
+      costoAnterior: number | null;
+
+      variacion: number | null;
+
+      registros: number;
+    })[]
+  >("/stock/reportes/costos");
+}
+
+// --- Logística / Remitos ---
+
+export type RemitoTipo = "salida" | "transferencia";
+
+export type RemitoEstado = "Emitido" | "Anulado";
+
+export interface RemitoItem {
+  id?: string;
+
+  articuloId: string;
+
+  cantidad: number;
+
+  costoUnitario: number;
+
+  subtotal?: number;
+
+  articuloNombre?: string;
+
+  unidad?: string;
+
+  codigo?: string | null;
+}
+
+export interface Remito {
+  id: string;
+
+  numero: number;
+
+  etiqueta?: string;
+
+  tipo: RemitoTipo;
+
+  depositoOrigenId: string;
+
+  depositoDestinoId: string | null;
+
+  depositoOrigen?: string;
+
+  depositoDestino?: string | null;
+
+  destino: string | null;
+
+  fecha: string;
+
+  estado: RemitoEstado;
+
+  valorTotal: number;
+
+  observaciones: string | null;
+
+  movimientoIds: string | string[];
+
+  articulos?: number;
+
+  items?: RemitoItem[];
+
+  createdAt: Date;
+}
+
+export function getRemitos(params?: {
+  tipo?: RemitoTipo;
+
+  depositoId?: string;
+
+  desde?: string;
+
+  hasta?: string;
+}) {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(params ?? {})) {
+    if (v) qs.set(k, v);
+  }
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return request<Remito[]>(`/remitos${suffix}`);
+}
+
+export function getRemito(id: string) {
+  return request<Remito>(`/remitos/${id}`);
+}
+
+export function createRemito(data: {
+  tipo: RemitoTipo;
+
+  depositoOrigenId: string;
+
+  depositoDestinoId?: string;
+
+  destino?: string;
+
+  fecha?: string;
+
+  observaciones?: string;
+
+  lineas: { articuloId: string; cantidad: number }[];
+}) {
+  return request<{ ok: true; id: string; numero: number; etiqueta: string; movimientos: string[] }>(
+    "/remitos",
+    { method: "POST", body: JSON.stringify(data) },
+  );
+}
+
+export function anularRemito(id: string) {
+  return request<{ ok: true; estado: RemitoEstado }>(`/remitos/${id}/anular`, {
     method: "POST",
   });
 }

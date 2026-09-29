@@ -16,6 +16,7 @@ import {
 import ProveedorFormModal from "@/components/ProveedorFormModal";
 import CompraFormModal from "@/components/CompraFormModal";
 import OrdenPagoModal from "@/components/OrdenPagoModal";
+import RecepcionCompraModal from "@/components/RecepcionCompraModal";
 
 const estadoStyle: Record<string, { bg: string; color: string }> = {
   Activo: { bg: "#d1fae5", color: "#10b981" },
@@ -28,6 +29,12 @@ const compraEstadoStyle: Record<string, { bg: string; color: string }> = {
   Recibido: { bg: "#d1fae5", color: "#10b981" },
   "En Tránsito": { bg: "#e0f2fe", color: "#0ea5e9" },
   Pendiente: { bg: "#fef3c7", color: "#f59e0b" },
+};
+
+const ingresoEstadoStyle: Record<string, { bg: string; color: string }> = {
+  Recibido: { bg: "#d1fae5", color: "#10b981" },
+  Parcial: { bg: "#e0f2fe", color: "#0ea5e9" },
+  Pendiente: { bg: "#f1f5f9", color: "#64748b" },
 };
 
 function formatMonto(value: number, moneda: string): string {
@@ -70,6 +77,7 @@ export default function ProveedorDetalle() {
   const [showCompra, setShowCompra] = useState(false);
   const [editingCompra, setEditingCompra] = useState<Compra | null>(null);
   const [deletingCompra, setDeletingCompra] = useState<Compra | null>(null);
+  const [recibirCompra, setRecibirCompra] = useState<Compra | null>(null);
   const [showOrden, setShowOrden] = useState(false);
   const [anulandoOrden, setAnulandoOrden] = useState<OrdenPago | null>(null);
 
@@ -352,14 +360,16 @@ export default function ProveedorDetalle() {
                 <table className="w-full">
                   <thead>
                     <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
-                      {["Fecha", "Descripción", "Items", "Total", "Estado", ""].map((h) => (
-                        <th
-                          key={h}
-                          className="text-left font-['Geist:Medium',sans-serif] font-medium text-[#475569] text-[13px] py-[8px]"
-                        >
-                          {h}
-                        </th>
-                      ))}
+                      {["Fecha", "Descripción", "Items", "Total", "Estado", "Ingreso", ""].map(
+                        (h) => (
+                          <th
+                            key={h}
+                            className="text-left font-['Geist:Medium',sans-serif] font-medium text-[#475569] text-[13px] py-[8px]"
+                          >
+                            {h}
+                          </th>
+                        ),
+                      )}
                     </tr>
                   </thead>
                   <tbody>
@@ -397,7 +407,35 @@ export default function ProveedorDetalle() {
                             </span>
                           </td>
                           <td className="py-[14px]">
+                            <span
+                              className="font-['Geist:SemiBold',sans-serif] font-semibold text-[12px] px-[8px] py-[3px] rounded-[6px]"
+                              style={
+                                ingresoEstadoStyle[compra.ingresoEstado ?? "Pendiente"] ??
+                                ingresoEstadoStyle.Pendiente
+                              }
+                            >
+                              {compra.ingresoEstado ?? "Pendiente"}
+                            </span>
+                          </td>
+                          <td className="py-[14px]">
                             <div className="flex items-center gap-[4px] opacity-0 group-hover:opacity-100 transition-opacity">
+                              {(compra.ingresoEstado ?? "Pendiente") !== "Recibido" && (
+                                <button
+                                  onClick={() => setRecibirCompra(compra)}
+                                  className="size-[26px] flex items-center justify-center rounded-[6px] hover:bg-[#e0f2fe] transition-colors"
+                                  title="Recibir en depósito"
+                                >
+                                  <svg fill="none" height="13" viewBox="0 0 16 16" width="13">
+                                    <path
+                                      d="M8 2V10M8 10L4.5 6.5M8 10L11.5 6.5M2.5 12.5V13.5C2.5 13.7761 2.72386 14 3 14H13C13.2761 14 13.5 13.7761 13.5 13.5V12.5"
+                                      stroke="#0ea5e9"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth="1.5"
+                                    />
+                                  </svg>
+                                </button>
+                              )}
                               <button
                                 onClick={() => setEditingCompra(compra)}
                                 className="size-[26px] flex items-center justify-center rounded-[6px] hover:bg-[#f1f5f9] transition-colors"
@@ -709,6 +747,18 @@ export default function ProveedorDetalle() {
           onSaved={() => {
             setEditingCompra(null);
             cargar();
+          }}
+        />
+      )}
+
+      {recibirCompra && (
+        <RecepcionCompraModal
+          compra={recibirCompra}
+          onClose={() => setRecibirCompra(null)}
+          onSaved={(estado) => {
+            setRecibirCompra(null);
+            cargar();
+            alert(`Recepción registrada. Estado de ingreso: ${estado}`);
           }}
         />
       )}

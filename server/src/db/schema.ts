@@ -1,4 +1,9 @@
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core"
+import {
+  sqliteTable,
+  text,
+  integer,
+  uniqueIndex,
+} from "drizzle-orm/sqlite-core"
 
 export const clientes = sqliteTable("clientes", {
   id: text("id").primaryKey(),
@@ -269,6 +274,10 @@ export const compras = sqliteTable("compras", {
 
   estado: text("estado").notNull().default("Pendiente"),
 
+  ingresoEstado: text("ingreso_estado").notNull().default("Pendiente"),
+
+  recepciones: text("recepciones").notNull().default("[]"),
+
   observaciones: text("observaciones"),
 
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
@@ -338,6 +347,156 @@ export const cheques = sqliteTable("cheques", {
   aplicaPagoProveedor: integer("aplica_pago_proveedor").notNull().default(0),
 
   proveedorId: text("proveedor_id"),
+
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+})
+
+export const depositos = sqliteTable("depositos", {
+  id: text("id").primaryKey(),
+
+  nombre: text("nombre").notNull().unique(),
+
+  direccion: text("direccion"),
+
+  activo: integer("activo").notNull().default(1),
+
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+})
+
+export const articulos = sqliteTable("articulos", {
+  id: text("id").primaryKey(),
+
+  codigo: text("codigo"),
+
+  nombre: text("nombre").notNull(),
+
+  unidad: text("unidad").notNull().default("un"),
+
+  costoUnitario: integer("costo_unitario").notNull().default(0),
+
+  activo: integer("activo").notNull().default(1),
+
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+})
+
+export const stock = sqliteTable(
+  "stock",
+  {
+    id: text("id").primaryKey(),
+
+    depositoId: text("deposito_id")
+      .notNull()
+      .references(() => depositos.id, { onDelete: "cascade" }),
+
+    articuloId: text("articulo_id")
+      .notNull()
+      .references(() => articulos.id, { onDelete: "cascade" }),
+
+    cantidad: integer("cantidad").notNull().default(0),
+
+    costoPromedio: integer("costo_promedio").notNull().default(0),
+
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  },
+  (t) => [uniqueIndex("stock_deposito_articulo_uq").on(t.depositoId, t.articuloId)],
+)
+
+export const movimientosStock = sqliteTable("movimientos_stock", {
+  id: text("id").primaryKey(),
+
+  fecha: text("fecha").notNull(),
+
+  tipo: text("tipo").notNull(),
+
+  articuloId: text("articulo_id")
+    .notNull()
+    .references(() => articulos.id, { onDelete: "restrict" }),
+
+  depositoOrigenId: text("deposito_origen_id").references(() => depositos.id, {
+    onDelete: "set null",
+  }),
+
+  depositoDestinoId: text("deposito_destino_id").references(
+    () => depositos.id,
+    { onDelete: "set null" },
+  ),
+
+  cantidad: integer("cantidad").notNull(),
+
+  costoUnitario: integer("costo_unitario").notNull().default(0),
+
+  referenciaTipo: text("referencia_tipo"),
+
+  referenciaId: text("referencia_id"),
+
+  motivo: text("motivo"),
+
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+})
+
+export const remitos = sqliteTable("remitos", {
+  id: text("id").primaryKey(),
+
+  numero: integer("numero").notNull(),
+
+  tipo: text("tipo").notNull(),
+
+  depositoOrigenId: text("deposito_origen_id")
+    .notNull()
+    .references(() => depositos.id, { onDelete: "restrict" }),
+
+  depositoDestinoId: text("deposito_destino_id").references(
+    () => depositos.id,
+    { onDelete: "set null" },
+  ),
+
+  destino: text("destino"),
+
+  fecha: text("fecha").notNull(),
+
+  estado: text("estado").notNull().default("Emitido"),
+
+  valorTotal: integer("valor_total").notNull().default(0),
+
+  observaciones: text("observaciones"),
+
+  movimientoIds: text("movimiento_ids").notNull().default("[]"),
+
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+})
+
+export const remitoItems = sqliteTable("remito_items", {
+  id: text("id").primaryKey(),
+
+  remitoId: text("remito_id")
+    .notNull()
+    .references(() => remitos.id, { onDelete: "cascade" }),
+
+  articuloId: text("articulo_id")
+    .notNull()
+    .references(() => articulos.id, { onDelete: "restrict" }),
+
+  cantidad: integer("cantidad").notNull(),
+
+  costoUnitario: integer("costo_unitario").notNull().default(0),
+
+  subtotal: integer("subtotal").notNull().default(0),
+})
+
+export const historialCostos = sqliteTable("historial_costos", {
+  id: text("id").primaryKey(),
+
+  articuloId: text("articulo_id")
+    .notNull()
+    .references(() => articulos.id, { onDelete: "cascade" }),
+
+  costo: integer("costo").notNull(),
+
+  fecha: text("fecha").notNull(),
+
+  origen: text("origen").notNull(),
+
+  referenciaId: text("referencia_id"),
 
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 })

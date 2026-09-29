@@ -150,6 +150,8 @@ sqlite.exec(`
     total INTEGER NOT NULL DEFAULT 0,
     items TEXT NOT NULL DEFAULT '[]',
     estado TEXT NOT NULL DEFAULT 'Pendiente',
+    ingreso_estado TEXT NOT NULL DEFAULT 'Pendiente',
+    recepciones TEXT NOT NULL DEFAULT '[]',
     observaciones TEXT,
     created_at INTEGER NOT NULL
   );
@@ -165,6 +167,85 @@ sqlite.exec(`
     compras_pagadas TEXT NOT NULL DEFAULT '[]',
     movimiento_ids TEXT NOT NULL DEFAULT '[]',
     observaciones TEXT,
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS depositos (
+    id TEXT PRIMARY KEY,
+    nombre TEXT NOT NULL UNIQUE,
+    direccion TEXT,
+    activo INTEGER NOT NULL DEFAULT 1,
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS articulos (
+    id TEXT PRIMARY KEY,
+    codigo TEXT,
+    nombre TEXT NOT NULL,
+    unidad TEXT NOT NULL DEFAULT 'un',
+    costo_unitario INTEGER NOT NULL DEFAULT 0,
+    activo INTEGER NOT NULL DEFAULT 1,
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS stock (
+    id TEXT PRIMARY KEY,
+    deposito_id TEXT NOT NULL REFERENCES depositos(id) ON DELETE CASCADE,
+    articulo_id TEXT NOT NULL REFERENCES articulos(id) ON DELETE CASCADE,
+    cantidad INTEGER NOT NULL DEFAULT 0,
+    costo_promedio INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE UNIQUE INDEX IF NOT EXISTS stock_deposito_articulo_uq
+    ON stock (deposito_id, articulo_id);
+
+  CREATE TABLE IF NOT EXISTS movimientos_stock (
+    id TEXT PRIMARY KEY,
+    fecha TEXT NOT NULL,
+    tipo TEXT NOT NULL,
+    articulo_id TEXT NOT NULL REFERENCES articulos(id) ON DELETE RESTRICT,
+    deposito_origen_id TEXT REFERENCES depositos(id) ON DELETE SET NULL,
+    deposito_destino_id TEXT REFERENCES depositos(id) ON DELETE SET NULL,
+    cantidad INTEGER NOT NULL,
+    costo_unitario INTEGER NOT NULL DEFAULT 0,
+    referencia_tipo TEXT,
+    referencia_id TEXT,
+    motivo TEXT,
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS remitos (
+    id TEXT PRIMARY KEY,
+    numero INTEGER NOT NULL,
+    tipo TEXT NOT NULL,
+    deposito_origen_id TEXT NOT NULL REFERENCES depositos(id) ON DELETE RESTRICT,
+    deposito_destino_id TEXT REFERENCES depositos(id) ON DELETE SET NULL,
+    destino TEXT,
+    fecha TEXT NOT NULL,
+    estado TEXT NOT NULL DEFAULT 'Emitido',
+    valor_total INTEGER NOT NULL DEFAULT 0,
+    observaciones TEXT,
+    movimiento_ids TEXT NOT NULL DEFAULT '[]',
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS remito_items (
+    id TEXT PRIMARY KEY,
+    remito_id TEXT NOT NULL REFERENCES remitos(id) ON DELETE CASCADE,
+    articulo_id TEXT NOT NULL REFERENCES articulos(id) ON DELETE RESTRICT,
+    cantidad INTEGER NOT NULL,
+    costo_unitario INTEGER NOT NULL DEFAULT 0,
+    subtotal INTEGER NOT NULL DEFAULT 0
+  );
+
+  CREATE TABLE IF NOT EXISTS historial_costos (
+    id TEXT PRIMARY KEY,
+    articulo_id TEXT NOT NULL REFERENCES articulos(id) ON DELETE CASCADE,
+    costo INTEGER NOT NULL,
+    fecha TEXT NOT NULL,
+    origen TEXT NOT NULL,
+    referencia_id TEXT,
     created_at INTEGER NOT NULL
   );
 `)
@@ -221,4 +302,24 @@ try {
   sqlite.prepare("SELECT fecha FROM cierres LIMIT 1").get()
 } catch {
   sqlite.exec("ALTER TABLE cierres ADD COLUMN fecha TEXT NOT NULL DEFAULT ''")
+}
+
+// Migration: add ingreso_estado column to compras if missing
+
+try {
+  sqlite.prepare("SELECT ingreso_estado FROM compras LIMIT 1").get()
+} catch {
+  sqlite.exec(
+    "ALTER TABLE compras ADD COLUMN ingreso_estado TEXT NOT NULL DEFAULT 'Pendiente'",
+  )
+}
+
+// Migration: add recepciones column to compras if missing
+
+try {
+  sqlite.prepare("SELECT recepciones FROM compras LIMIT 1").get()
+} catch {
+  sqlite.exec(
+    "ALTER TABLE compras ADD COLUMN recepciones TEXT NOT NULL DEFAULT '[]'",
+  )
 }

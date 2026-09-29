@@ -7,6 +7,8 @@ import Caja from "@/pages/Caja";
 import Calendario from "@/pages/Calendario";
 import Proveedores from "@/pages/Proveedores";
 import ProveedorDetalle from "@/pages/ProveedorDetalle";
+import Stock from "@/pages/Stock";
+import Logistica from "@/pages/Logistica";
 
 export default function App() {
   return (
@@ -20,6 +22,8 @@ export default function App() {
         <Route path="/calendario" element={<Calendario />} />
         <Route path="/proveedores" element={<Proveedores />} />
         <Route path="/proveedores/:id" element={<ProveedorDetalle />} />
+        <Route path="/stock" element={<Stock />} />
+        <Route path="/logistica" element={<Logistica />} />
       </Routes>
     </BrowserRouter>
   );
