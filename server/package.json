@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "migrate": "tsx src/db/migrate.ts"
+    "migrate": "tsx src/db/migrate.ts",
+    "seed": "node scripts/seed.mjs"
   },
   "dependencies": {
     "better-sqlite3": "^11.0.0",

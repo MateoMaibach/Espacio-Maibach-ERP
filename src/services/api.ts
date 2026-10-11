@@ -1471,3 +1471,131 @@ export function anularRemito(id: string) {
     method: "POST",
   });
 }
+
+// --- Dashboard ---
+
+export interface DashboardKpis {
+  ventasMes: number;
+
+  ventasMesAnterior: number;
+
+  variacionVentas: number | null;
+
+  totalFacturado: number;
+
+  porCobrar: number;
+
+  clientesActivos: number;
+
+  totalClientes: number;
+
+  cuotasVencidas: number;
+
+  montoVencido: number;
+
+  cajaIngresos: number;
+
+  cajaEgresos: number;
+
+  gananciaNeta: number;
+
+  subCajas: Record<string, { total: number; ingresos: number; egresos: number }>;
+
+  cuentasAPagar: number;
+
+  proveedoresConSaldo: number;
+
+  valorStock: number;
+
+  itemsStockNegativo: number;
+
+  articulosActivos: number;
+
+  depositosActivos: number;
+
+  carteraCheques: number;
+
+  comprasMes: number;
+
+  comprasPendientes: number;
+}
+
+export interface DashboardVentaMes {
+  clave: string;
+
+  mes: string;
+
+  anio: number;
+
+  total: number;
+}
+
+export interface DashboardMoroso {
+  clienteId: string;
+
+  cliente: string;
+
+  cuotas: number;
+
+  monto: number;
+}
+
+export interface DashboardCheque {
+  id: string;
+
+  tipo: "emitido" | "recibido";
+
+  banco: string;
+
+  numero: string;
+
+  importe: number;
+
+  estado: string;
+
+  fechaCobro: string | null;
+
+  diasParaCobro: number | null;
+}
+
+export interface DashboardAgenda {
+  id: string;
+
+  tipo: "instalacion" | "vereda";
+
+  fecha: string | null;
+
+  estado: string;
+
+  notas: string | null;
+
+  equipo: string | null;
+}
+
+export interface Dashboard {
+  generadoEn: string;
+
+  hoy: string;
+
+  kpis: DashboardKpis;
+
+  serieVentas: DashboardVentaMes[];
+
+  morosos: DashboardMoroso[];
+
+  chequesAVencer: DashboardCheque[];
+
+  agenda: DashboardAgenda[];
+
+  contadores: {
+    instalacionesPendientes: number;
+
+    instalacionesConfirmadas: number;
+
+    veredasPendientes: number;
+  };
+}
+
+export function getDashboard() {
+  return request<Dashboard>("/dashboard");
+}

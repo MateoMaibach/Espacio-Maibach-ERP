@@ -28,7 +28,11 @@ export interface SaldoMoneda {
   saldo: number
 }
 
-function calcularSaldos() {
+/**
+ * Exportada para que el dashboard reuse exactamente la misma cuenta que la
+ * ficha de proveedor, en vez de recalcularla por otro lado.
+ */
+export function calcularSaldos() {
   const comprado: Record<string, Record<string, number>> = {}
   const pagado: Record<string, Record<string, number>> = {}
   const ultimaCompra: Record<string, string> = {}
