@@ -1190,13 +1190,6 @@ export function updateArticulo(
   });
 }
 
-export function updateCostoArticulo(id: string, costoUnitario: number) {
-  return request<{ ok: true; costo: number }>(`/articulos/${id}/costo`, {
-    method: "PUT",
-    body: JSON.stringify({ costoUnitario }),
-  });
-}
-
 export function getHistorialCostos(id: string) {
   return request<{ articulo: Articulo; historial: HistorialCosto[] }>(
     `/articulos/${id}/historial-costos`,
