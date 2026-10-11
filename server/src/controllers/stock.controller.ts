@@ -1,4 +1,7 @@
 import { Request, Response } from "express"
+
+import { idUnico } from "../utils/id.js"
+
 import { db } from "../db/index.js"
 import {
   stock,
@@ -12,8 +15,9 @@ import {
   aplicarStock,
   crearMovimiento,
   hoy,
-  idUnico,
 } from "../services/stock.service.js"
+
+const FECHA_REGEX = /^\d{4}-\d{2}-\d{2}$/
 
 function existeDeposito(id: string) {
   return db.select().from(depositos).where(eq(depositos.id, id)).get()
@@ -186,6 +190,13 @@ export function createIngresoInicial(req: Request, res: Response) {
 
   const fechaFinal = fecha || hoy()
 
+  if (!FECHA_REGEX.test(fechaFinal)) {
+    res
+      .status(400)
+      .json({ error: "La fecha debe tener formato yyyy-mm-dd" })
+    return
+  }
+
   const normalizadas: {
     articuloId: string
     cantidad: number
@@ -299,6 +310,13 @@ export function createAjuste(req: Request, res: Response) {
   }
 
   const fechaFinal = fecha || hoy()
+
+  if (!FECHA_REGEX.test(fechaFinal)) {
+    res
+      .status(400)
+      .json({ error: "La fecha debe tener formato yyyy-mm-dd" })
+    return
+  }
 
   const normalizadas: { articuloId: string; cantidad: number }[] = []
 

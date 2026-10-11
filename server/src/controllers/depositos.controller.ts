@@ -1,4 +1,7 @@
 import { Request, Response } from "express"
+
+import { idUnico } from "../utils/id.js"
+
 import { db } from "../db/index.js"
 import { depositos, stock, movimientosStock } from "../db/schema.js"
 import { eq, sql, or } from "drizzle-orm"
@@ -67,7 +70,7 @@ export function create(req: Request, res: Response) {
     return
   }
 
-  const id = `dep_${Date.now()}`
+  const id = idUnico("dep")
   db.insert(depositos)
     .values({
       id,

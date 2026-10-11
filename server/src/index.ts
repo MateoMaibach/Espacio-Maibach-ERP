@@ -1,4 +1,4 @@
-import express from "express"
+import express, { NextFunction, Request, Response } from "express"
 
 import cors from "cors"
 
@@ -86,6 +86,16 @@ app.use("/api/remitos", remitosRouter)
 
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok" })
+})
+
+app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+  console.error(err)
+
+  // Los errores de express.json() (body malformado) traen su propio status.
+
+  const status = (err as { status?: number }).status ?? 500
+
+  res.status(status).json({ error: err.message || "Error interno del servidor" })
 })
 
 app.listen(PORT, () => {

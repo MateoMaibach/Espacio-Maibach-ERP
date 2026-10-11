@@ -6,7 +6,9 @@ import * as schema from "./schema.js"
 
 import { config } from "dotenv"
 
-import { resolve } from "path"
+import { resolve, dirname } from "path"
+
+import { mkdirSync } from "fs"
 
 config({ path: resolve(import.meta.dirname, "../../.env") })
 
@@ -15,6 +17,8 @@ const dbPath = resolve(
   "../..",
   process.env.DATABASE_URL || "./data/espacio.db",
 )
+
+mkdirSync(dirname(dbPath), { recursive: true })
 
 const sqlite = new Database(dbPath)
 
@@ -27,6 +31,55 @@ export const db = drizzle(sqlite, { schema })
 export { sqlite }
 
 sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS clientes (
+    id TEXT PRIMARY KEY,
+    nombre TEXT NOT NULL,
+    cuit TEXT,
+    email TEXT,
+    telefono TEXT,
+    direccion TEXT,
+    localidad TEXT,
+    dni TEXT,
+    estado TEXT NOT NULL DEFAULT 'Activo',
+    vendedor TEXT NOT NULL DEFAULT 'Martín Maibach',
+    metodo_pago TEXT,
+    notas TEXT,
+    fecha_alta TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS ficheros (
+    id TEXT PRIMARY KEY,
+    cliente_id TEXT NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
+    fecha TEXT NOT NULL,
+    vendedor TEXT NOT NULL,
+    comision TEXT,
+    items TEXT NOT NULL DEFAULT '[]',
+    total TEXT NOT NULL DEFAULT '$0',
+    costos TEXT,
+    tipo_cobro TEXT NOT NULL DEFAULT 'libre',
+    cant_cuotas INTEGER NOT NULL DEFAULT 0,
+    pago_inicial INTEGER NOT NULL DEFAULT 0,
+    estado TEXT NOT NULL DEFAULT 'pendiente',
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS cuotas (
+    id TEXT PRIMARY KEY,
+    fichero_id TEXT NOT NULL REFERENCES ficheros(id) ON DELETE CASCADE,
+    nro_cuota INTEGER NOT NULL,
+    fecha_vencimiento TEXT NOT NULL,
+    monto_planificado INTEGER NOT NULL,
+    monto_pagado INTEGER NOT NULL DEFAULT 0,
+    estado TEXT NOT NULL DEFAULT 'Pendiente',
+    fecha_pago TEXT,
+    metodo TEXT,
+    comprobante TEXT,
+    observaciones TEXT,
+    descripcion TEXT,
+    created_at INTEGER NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS cajas (
     id TEXT PRIMARY KEY,
     nombre TEXT NOT NULL,
@@ -251,6 +304,25 @@ sqlite.exec(`
 `)
 
 // Migration: add pago a proveedor columns to cheques if missing
+
+function agregarColumnaSiFalta(
+  tabla: string,
+  columna: string,
+  definicion: string,
+) {
+  const columnas = sqlite
+    .prepare(`PRAGMA table_info(${tabla})`)
+    .all() as { name: string }[]
+
+  if (columnas.some((c) => c.name === columna)) return
+
+  sqlite.exec(`ALTER TABLE ${tabla} ADD COLUMN ${columna} ${definicion}`)
+}
+
+// clientes/ficheros/cuotas quedaron fuera del bloque CREATE anterior en
+// instalaciones previas al fix del bootstrap, asi que se aggregan aca.
+
+agregarColumnaSiFalta("ficheros", "pago_inicial", "INTEGER NOT NULL DEFAULT 0")
 
 try {
   sqlite.prepare("SELECT aplica_pago_proveedor FROM cheques LIMIT 1").get()

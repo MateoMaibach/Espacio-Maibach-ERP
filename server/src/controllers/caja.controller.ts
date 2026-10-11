@@ -1,5 +1,7 @@
 import { Request, Response } from "express"
 
+import { idUnico } from "../utils/id.js"
+
 import { db } from "../db/index.js"
 
 import { movimientos, cierres, cajas } from "../db/schema.js"
@@ -116,7 +118,7 @@ export function createMovimiento(req: Request, res: Response) {
     return
   }
 
-  const id = `mov_${Date.now()}`
+  const id = idUnico("mov")
 
   const fechaStr = fecha || getCurrentDateStr()
 
@@ -351,9 +353,13 @@ export function realizarCierre(req: Request, res: Response) {
 
     const ajusteMonto = Math.abs(diff)
 
+    // TODO(calculos): el ajuste se fecha con getCurrentDateStr() en vez de la
+  // fecha del periodo cerrado, asi que al cerrar un mes pasado la diferencia
+  // aparece en el mes actual y altera el resumen de ese mes.
+
     db.insert(movimientos)
       .values({
-        id: `mov_${Date.now()}_ajuste`,
+        id: idUnico("mov_ajuste"),
 
         fecha: getCurrentDateStr(),
 
@@ -377,7 +383,7 @@ export function realizarCierre(req: Request, res: Response) {
       .run()
   }
 
-  const id = `cierre_${Date.now()}`
+  const id = idUnico("cierre")
 
   db.insert(cierres)
     .values({

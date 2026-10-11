@@ -1,5 +1,7 @@
 import { Request, Response } from "express"
 
+import { idUnico } from "../utils/id.js"
+
 import { db } from "../db/index.js"
 
 import { cheques, clientes, proveedores } from "../db/schema.js"
@@ -135,7 +137,7 @@ export function create(req: Request, res: Response) {
     proveedorId,
   } = req.body
 
-  if (!tipo || !(tipo in ESTADOS_POR_TIPO)) {
+  if (!tipo || !Object.hasOwn(ESTADOS_POR_TIPO, tipo)) {
     res
       .status(400)
       .json({ error: "Tipo inválido: debe ser 'emitido' o 'recibido'" })
@@ -206,7 +208,7 @@ export function create(req: Request, res: Response) {
     return
   }
 
-  const id = `chq_${Date.now()}`
+  const id = idUnico("chq")
 
   db.insert(cheques)
     .values({
@@ -288,7 +290,7 @@ export function update(req: Request, res: Response) {
 
   const tipoFinal = tipo ?? existing.tipo
 
-  if (!(tipoFinal in ESTADOS_POR_TIPO)) {
+  if (!Object.hasOwn(ESTADOS_POR_TIPO, tipoFinal)) {
     res
       .status(400)
       .json({ error: "Tipo inválido: debe ser 'emitido' o 'recibido'" })
@@ -342,6 +344,12 @@ export function update(req: Request, res: Response) {
   let aplicaPagoFinal: number | undefined
 
   let proveedorIdFinal: string | null | undefined
+
+  // TODO(calculos): como el front siempre manda `tipo`, este bloque corre
+  // siempre. Al editar un cheque `recibido` aplica=false y termina haciendo
+  // proveedorId: null, borrando el link con la orden de pago. Deberia tocar
+  // esos campos solo cuando el cliente los mande explicitos. Requiere
+  // cambiar comportamiento observable: revisar antes.
 
   if (
     aplicaPagoProveedor !== undefined ||

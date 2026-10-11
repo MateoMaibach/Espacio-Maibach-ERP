@@ -1,4 +1,7 @@
 import { Request, Response } from "express"
+
+import { idUnico } from "../utils/id.js"
+
 import { db } from "../db/index.js"
 import { proveedores, compras, ordenesPago } from "../db/schema.js"
 import { eq, sql } from "drizzle-orm"
@@ -175,7 +178,7 @@ export function create(req: Request, res: Response) {
     return
   }
 
-  const id = `prv_${Date.now()}`
+  const id = idUnico("prv")
   db.insert(proveedores)
     .values({
       id,

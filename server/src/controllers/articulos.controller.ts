@@ -1,8 +1,10 @@
 import { Request, Response } from "express"
+
+import { idUnico } from "../utils/id.js"
+
 import { db } from "../db/index.js"
 import { articulos, stock, movimientosStock, remitoItems, historialCostos } from "../db/schema.js"
 import { eq, sql } from "drizzle-orm"
-import { idUnico } from "../services/stock.service.js"
 
 export function hoy(): string {
   return new Date().toISOString().slice(0, 10)
@@ -91,7 +93,7 @@ export function create(req: Request, res: Response) {
     return
   }
 
-  const id = `art_${Date.now()}`
+  const id = idUnico("art")
   db.insert(articulos)
     .values({
       id,
@@ -147,6 +149,12 @@ export function update(req: Request, res: Response) {
       return
     }
   }
+
+  // TODO(calculos): este update no escribe en historial_costos, solo lo hace
+  // updateCosto. Como el front usa este endpoint y nunca el otro
+  // (api.ts exporta updateCostoArticulo pero nadie lo importa), editar el
+  // costo de un articulo deja historial_costos desactualizado y
+  // GET /api/stock/reportes/costos muestra el valor viejo.
 
   db.update(articulos)
     .set({
