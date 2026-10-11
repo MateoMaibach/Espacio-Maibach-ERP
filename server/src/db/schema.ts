@@ -5,6 +5,14 @@ import {
   uniqueIndex,
 } from "drizzle-orm/sqlite-core"
 
+// TODO(esquema): los montos y los tipos de cambio estan en columnas INTEGER
+// (compras.tipo_cambio, compras.total, articulos.costo_unitario,
+// stock.costo_promedio, movimientos_stock.cantidad/costo_unitario,
+// remito_items.*, historial_costos.costo) pero el front manda step="0.01".
+// Los controladores hacen Math.round de forma bastante consistente, asi que
+// no rompe, pero se pierden los centavos. Migrar esas columnas a real exige
+// revisar los calculos de saldo y valorizacion, por eso queda como tarea aparte.
+
 export const clientes = sqliteTable("clientes", {
   id: text("id").primaryKey(),
 

@@ -1,15 +1,12 @@
 import { db } from "../db/index.js"
 import { stock, movimientosStock } from "../db/schema.js"
 import { eq, and } from "drizzle-orm"
+import { idUnico } from "../utils/id.js"
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0]
 
 export function hoy(): string {
   return new Date().toISOString().slice(0, 10)
-}
-
-export function idUnico(prefijo: string): string {
-  return `${prefijo}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
 }
 
 function getStock(tx: Tx, depositoId: string, articuloId: string) {
@@ -40,7 +37,7 @@ export function aplicarStock(
   if (!actual) {
     tx.insert(stock)
       .values({
-        id: `stk_${Date.now()}_${articuloId.slice(-4)}`,
+        id: idUnico("stk"),
         depositoId,
         articuloId,
         cantidad: delta,
@@ -53,6 +50,11 @@ export function aplicarStock(
 
   const cantidad = actual.cantidad + delta
   let costoPromedio = actual.costoPromedio
+
+  // TODO(calculos): deberia ser `=== 0`, no `<= 0`. Cuando el deposito sigue
+  // en negativo y entra mercaderia, esto descarta el costo promedio real de
+  // las unidades que quedan y lo reemplaza por el costo de la entrada.
+  // Corregirlo cambia los numeros de valorizacion.
 
   if (delta > 0) {
     if (actual.cantidad <= 0) {
@@ -85,7 +87,7 @@ export function crearMovimiento(
     motivo?: string | null
   },
 ): string {
-  const id = `mvt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+  const id = idUnico("mvt")
 
   tx.insert(movimientosStock)
     .values({

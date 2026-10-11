@@ -1,5 +1,7 @@
 import { Request, Response } from "express"
 
+import { idUnico } from "../utils/id.js"
+
 import { db } from "../db/index.js"
 
 import { equipos } from "../db/schema.js"
@@ -77,7 +79,7 @@ export function create(req: Request, res: Response) {
       .filter((e) => e !== "")
   }
 
-  const id = `eq_${Date.now()}`
+  const id = idUnico("eq")
 
   db.insert(equipos)
     .values({

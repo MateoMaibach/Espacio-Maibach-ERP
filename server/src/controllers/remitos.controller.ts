@@ -1,4 +1,7 @@
 import { Request, Response } from "express"
+
+import { idUnico } from "../utils/id.js"
+
 import { db } from "../db/index.js"
 import {
   remitos,
@@ -207,13 +210,22 @@ export function create(req: Request, res: Response) {
         .json({ error: `Línea ${i + 1}: la cantidad debe ser mayor a cero` })
       return
     }
+    const costoUnitario =
+      linea.costoUnitario === undefined || linea.costoUnitario === null
+        ? articulo.costoUnitario
+        : Math.max(0, Math.round(Number(linea.costoUnitario)))
+
+    if (!Number.isFinite(costoUnitario)) {
+      res
+        .status(400)
+        .json({ error: `Línea ${i + 1}: el costo unitario es inválido` })
+      return
+    }
+
     normalizadas.push({
       articuloId: articulo.id,
       cantidad,
-      costoUnitario:
-        linea.costoUnitario === undefined || linea.costoUnitario === null
-          ? articulo.costoUnitario
-          : Math.max(0, Math.round(Number(linea.costoUnitario))),
+      costoUnitario,
     })
   }
 
@@ -225,7 +237,7 @@ export function create(req: Request, res: Response) {
       .from(remitos)
       .get()
     const numero = (maxRow?.max ?? 0) + 1
-    const remitoId = `rem_${Date.now()}`
+    const remitoId = idUnico("rem")
 
     tx.insert(remitos)
       .values({
@@ -249,7 +261,7 @@ export function create(req: Request, res: Response) {
     for (const linea of normalizadas) {
       tx.insert(remitoItems)
         .values({
-          id: `rit_${Date.now()}_${movimientoIds.length}`,
+          id: idUnico("rit"),
           remitoId,
           articuloId: linea.articuloId,
           cantidad: linea.cantidad,
@@ -270,6 +282,13 @@ export function create(req: Request, res: Response) {
         referenciaId: remitoId,
         motivo: destinoDep ? `Transferencia a ${destinoDep.nombre}` : (destino ?? null),
       })
+
+      // TODO(calculos): en transferencias y anulaciones se pasa el costo del
+  // articulo (o el congelado en la linea del remito) en vez del
+  // costoPromedio real del deposito origen. Como aplicarStock recalcula el
+  // promedio ponderado en cada delta>0, la valorizacion del destino queda
+  // contaminada y anular un remito reescribe costos historicos del origen.
+  // Corregirlo cambia los numeros de stock y logistica.
 
       aplicarStock(tx, {
         depositoId: origen.id,

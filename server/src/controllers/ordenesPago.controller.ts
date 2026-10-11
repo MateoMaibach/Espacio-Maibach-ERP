@@ -1,4 +1,7 @@
 import { Request, Response } from "express"
+
+import { idUnico } from "../utils/id.js"
+
 import { db } from "../db/index.js"
 import {
   ordenesPago,
@@ -315,7 +318,7 @@ export function create(req: Request, res: Response) {
     return
   }
 
-  const id = `op_${Date.now()}`
+  const id = idUnico("op")
   const etiquetaAnterior = db
     .select({ max: sql<number>`coalesce(max(numero), 0)` })
     .from(ordenesPago)
@@ -342,8 +345,8 @@ export function create(req: Request, res: Response) {
         })
         .run()
 
-      validDetalles.value.forEach((linea, i) => {
-        const movId = `mov_${Date.now()}_${i}`
+      validDetalles.value.forEach((linea) => {
+        const movId = idUnico("mov")
         const cheque = linea.chequeId
           ? db
               .select()

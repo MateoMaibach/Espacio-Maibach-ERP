@@ -3,4 +3,5 @@ dist/
 server/data/
 .env
 *.db
+*.log
 docs/

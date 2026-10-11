@@ -1,5 +1,7 @@
 import { Request, Response } from "express"
 
+import { idUnico } from "../utils/id.js"
+
 import { db } from "../db/index.js"
 
 import { cajas, movimientos } from "../db/schema.js"
@@ -17,13 +19,19 @@ export function getAll(_req: Request, res: Response) {
 export function create(req: Request, res: Response) {
   const { nombre, color, orden, afectaGeneral } = req.body
 
-  if (!nombre || !color) {
+  if (typeof nombre !== "string" || !nombre.trim() || !color) {
     res.status(400).json({ error: "Faltan campos obligatorios: nombre, color" })
 
     return
   }
 
-  const existing = db.select().from(cajas).where(eq(cajas.nombre, nombre)).get()
+  const nombreLimpio = nombre.trim()
+
+  const existing = db
+    .select()
+    .from(cajas)
+    .where(eq(cajas.nombre, nombreLimpio))
+    .get()
 
   if (existing) {
     res.status(400).json({ error: "Ya existe una caja con ese nombre" })
@@ -37,13 +45,13 @@ export function create(req: Request, res: Response) {
     .all()
     .reduce((max, c) => Math.max(max, c.orden), 0)
 
-  const id = `caj_${Date.now()}`
+  const id = idUnico("caj")
 
   db.insert(cajas)
     .values({
       id,
 
-      nombre: nombre.trim(),
+      nombre: nombreLimpio,
 
       color,
 
@@ -75,19 +83,35 @@ export function update(req: Request, res: Response) {
 
   const { nombre, color, orden, activa, afectaGeneral } = req.body
 
-  if (nombre && nombre !== existing.nombre) {
-    const dup = db.select().from(cajas).where(eq(cajas.nombre, nombre)).get()
+  let nombreLimpio: string | undefined
 
-    if (dup) {
-      res.status(400).json({ error: "Ya existe una caja con ese nombre" })
+  if (nombre !== undefined) {
+    if (typeof nombre !== "string" || !nombre.trim()) {
+      res.status(400).json({ error: "El nombre no puede quedar vacio" })
 
       return
+    }
+
+    nombreLimpio = nombre.trim()
+
+    if (nombreLimpio !== existing.nombre) {
+      const dup = db
+        .select()
+        .from(cajas)
+        .where(eq(cajas.nombre, nombreLimpio))
+        .get()
+
+      if (dup) {
+        res.status(400).json({ error: "Ya existe una caja con ese nombre" })
+
+        return
+      }
     }
   }
 
   db.update(cajas)
     .set({
-      ...(nombre !== undefined && { nombre: nombre.trim() }),
+      ...(nombreLimpio !== undefined && { nombre: nombreLimpio }),
 
       ...(color !== undefined && { color }),
 

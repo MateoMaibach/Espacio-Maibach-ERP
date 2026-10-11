@@ -1,5 +1,7 @@
 import { Request, Response } from "express"
 
+import { idUnico } from "../utils/id.js"
+
 import { db } from "../db/index.js"
 
 import { ficheros, clientes } from "../db/schema.js"
@@ -67,7 +69,7 @@ export function upsert(req: Request, res: Response) {
       .where(eq(ficheros.id, existing.id))
       .run()
   } else {
-    const id = `fich_${Date.now()}`
+    const id = idUnico("fich")
 
     db.insert(ficheros)
       .values({

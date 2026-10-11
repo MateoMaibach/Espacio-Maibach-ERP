@@ -1,5 +1,7 @@
 import { Request, Response } from "express"
 
+import { idUnico } from "../utils/id.js"
+
 import { db } from "../db/index.js"
 
 import { instalaciones, ficheros, clientes, equipos } from "../db/schema.js"
@@ -274,7 +276,7 @@ export function create(req: Request, res: Response) {
     return
   }
 
-  const id = `ins_${Date.now()}`
+  const id = idUnico("ins")
 
   db.insert(instalaciones)
     .values({

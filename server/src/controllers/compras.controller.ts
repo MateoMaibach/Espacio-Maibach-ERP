@@ -1,4 +1,7 @@
 import { Request, Response } from "express"
+
+import { idUnico } from "../utils/id.js"
+
 import { db } from "../db/index.js"
 import { compras, proveedores, ordenesPago, articulos, depositos, historialCostos } from "../db/schema.js"
 import { eq, desc } from "drizzle-orm"
@@ -6,7 +9,6 @@ import {
   aplicarStock,
   crearMovimiento,
   hoy,
-  idUnico,
 } from "../services/stock.service.js"
 
 export const ESTADOS_COMPRA = ["Pendiente", "En Tránsito", "Recibido"]
@@ -145,7 +147,7 @@ export function create(req: Request, res: Response) {
     return
   }
 
-  const id = `cmp_${Date.now()}`
+  const id = idUnico("cmp")
   db.insert(compras)
     .values({
       id,
@@ -198,6 +200,12 @@ export function update(req: Request, res: Response) {
       })
     return
   }
+
+  // TODO(api): este rechazo bloquea el boton Editar de la UI después del primer
+  // ingreso de mercaderia, aunque solo se cambie la descripcion, porque
+  // CompraFormModal siempre manda `items` en el payload. La correccion puede
+  // ser del lado del cliente (omitir items si no cambian) o comparar los
+  // items en vez de rechazarlos.
 
   let total = existing.total
   let itemsStr: string | undefined
@@ -451,6 +459,13 @@ export function createRecepcion(req: Request, res: Response) {
   const items = parseJson<ItemCompra[]>(existing.items, [])
   const fechaFinal = fecha || hoy()
 
+  if (!FECHA_REGEX.test(fechaFinal)) {
+    res
+      .status(400)
+      .json({ error: "La fecha debe tener formato yyyy-mm-dd" })
+    return
+  }
+
   const normalizadas: {
     itemIndex: number
     articuloId: string
@@ -551,7 +566,7 @@ export function createRecepcion(req: Request, res: Response) {
     }
 
     const recepcion: Recepcion = {
-      id: `rcp_${Date.now()}`,
+      id: idUnico("rcp"),
       fecha: fechaFinal,
       depositoId: deposito.id,
       depositoNombre: deposito.nombre,

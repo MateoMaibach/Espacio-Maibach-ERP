@@ -1,5 +1,7 @@
 import { Request, Response } from "express"
 
+import { idUnico } from "../utils/id.js"
+
 import { db } from "../db/index.js"
 
 import { ficheros, cuotas, clientes } from "../db/schema.js"
@@ -12,6 +14,27 @@ function getFicheroByClienteId(clienteId: string) {
     .from(ficheros)
     .where(eq(ficheros.clienteId, clienteId))
     .get()
+}
+
+/**
+ * Resuelve la cuota indicada y verifica que pertenezca al cliente de la URL.
+ * Sin este cruce, PUT/POST/DELETE /clientes/:id/fichero/cuotas/:cuotaId
+ * permitian modificar o borrar cuotas de otro cliente.
+ */
+function getCuotaDeCliente(clienteId: string, cuotaId: string) {
+  const cuota = db.select().from(cuotas).where(eq(cuotas.id, cuotaId)).get()
+
+  if (!cuota) return undefined
+
+  const fichero = db
+    .select()
+    .from(ficheros)
+    .where(eq(ficheros.id, cuota.ficheroId))
+    .get()
+
+  if (!fichero || fichero.clienteId !== clienteId) return undefined
+
+  return cuota
 }
 
 function parseCurrency(value: string): number {
@@ -96,7 +119,7 @@ export function registrarPagoInicial(req: Request, res: Response) {
   } else {
     db.insert(cuotas)
       .values({
-        id: `cuo_${Date.now()}_initial`,
+        id: idUnico("cuo_initial"),
 
         ficheroId: fichero.id,
 
@@ -175,6 +198,12 @@ export function generarPlan(req: Request, res: Response) {
     return
   }
 
+  // TODO(calculos): generarPlan ignora el mes que viene en fechaPrimerVto.
+  // El front manda dd/mm/aaaa (ClienteDetalle.tsx) pero este parser espera
+  // "10 Oct, 2026", asi que monthsMap["10"] da undefined y cae al mes actual.
+  // Ademas la linea de abajo fija el dia en 1. Corregirlo cambia los
+  // vencimientos que ve el usuario: revisar con el equipo antes de tocar.
+
   const monthsMap: Record<string, number> = {
     Ene: 0,
     Feb: 1,
@@ -237,6 +266,10 @@ export function generarPlan(req: Request, res: Response) {
 
   const montoUltima = saldo - montoPorCuota * (n - 1)
 
+  // TODO(calculos): este for ignora el dia de fechaPrimerVto (siempre 1) y
+  // con n fraccionario nunca aplica montoUltima, dejando las cuotas sin
+  // cuadrar contra el saldo. Ver el TODO de generarPlan mas arriba.
+
   for (let i = 0; i < n; i++) {
     const fecha = new Date(startYear, startMonth + i, 1)
 
@@ -246,7 +279,7 @@ export function generarPlan(req: Request, res: Response) {
 
     db.insert(cuotas)
       .values({
-        id: `cuo_${Date.now()}_${i}`,
+        id: idUnico("cuo"),
 
         ficheroId: fichero.id,
 
@@ -302,7 +335,7 @@ export function agregarCargo(req: Request, res: Response) {
 
   db.insert(cuotas)
     .values({
-      id: `cuo_${Date.now()}`,
+      id: idUnico("cuo"),
 
       ficheroId: fichero.id,
 
@@ -326,11 +359,10 @@ export function agregarCargo(req: Request, res: Response) {
 }
 
 export function editarCuota(req: Request, res: Response) {
-  const cuota = db
-    .select()
-    .from(cuotas)
-    .where(eq(cuotas.id, req.params.cuotaId as string))
-    .get()
+  const cuota = getCuotaDeCliente(
+    req.params.id as string,
+    req.params.cuotaId as string,
+  )
 
   if (!cuota) {
     res.status(404).json({ error: "Cuota no encontrada" })
@@ -368,11 +400,10 @@ export function editarCuota(req: Request, res: Response) {
 }
 
 export function registrarCobro(req: Request, res: Response) {
-  const cuota = db
-    .select()
-    .from(cuotas)
-    .where(eq(cuotas.id, req.params.cuotaId as string))
-    .get()
+  const cuota = getCuotaDeCliente(
+    req.params.id as string,
+    req.params.cuotaId as string,
+  )
 
   if (!cuota) {
     res.status(404).json({ error: "Cuota no encontrada" })
@@ -414,11 +445,10 @@ export function registrarCobro(req: Request, res: Response) {
 }
 
 export function eliminarCuota(req: Request, res: Response) {
-  const cuota = db
-    .select()
-    .from(cuotas)
-    .where(eq(cuotas.id, req.params.cuotaId as string))
-    .get()
+  const cuota = getCuotaDeCliente(
+    req.params.id as string,
+    req.params.cuotaId as string,
+  )
 
   if (!cuota) {
     res.status(404).json({ error: "Cuota no encontrada" })
