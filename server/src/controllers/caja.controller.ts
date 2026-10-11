@@ -416,11 +416,18 @@ export function realizarCierre(req: Request, res: Response) {
   res.status(201).json({ ok: true, id, diferencia: diff })
 }
 
-export function getResumenCaja(req: Request, res: Response) {
-  const mes = parseInt(req.query.mes as string) || new Date().getMonth() + 1
+export interface ResumenCaja {
+  subCajas: Record<string, { total: number; ingresos: number; egresos: number }>
+  totalIngresos: number
+  totalEgresos: number
+  gananciaNeta: number
+}
 
-  const anio = parseInt(req.query.anio as string) || new Date().getFullYear()
-
+/**
+ * Logica compartida entre GET /api/caja/resumen y el dashboard, para que la
+ * regla de afectaGeneral no quede duplicada en dos lugares.
+ */
+export function calcularResumenCaja(mes: number, anio: number): ResumenCaja {
   const allMovimientos = db.select().from(movimientos).all()
 
   const mesMovimientos = allMovimientos.filter((m) => {
@@ -473,10 +480,18 @@ export function getResumenCaja(req: Request, res: Response) {
     .filter((m) => m.tipo === "egreso")
     .reduce((acc, m) => acc + m.monto, 0)
 
-  res.json({
+  return {
     subCajas: resumen,
     totalIngresos,
     totalEgresos,
     gananciaNeta: totalIngresos - totalEgresos,
-  })
+  }
+}
+
+export function getResumenCaja(req: Request, res: Response) {
+  const mes = parseInt(req.query.mes as string) || new Date().getMonth() + 1
+
+  const anio = parseInt(req.query.anio as string) || new Date().getFullYear()
+
+  res.json(calcularResumenCaja(mes, anio))
 }

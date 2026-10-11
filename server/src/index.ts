@@ -40,6 +40,8 @@ import stockRouter from "./routes/stock.js"
 
 import remitosRouter from "./routes/remitos.js"
 
+import dashboardRouter from "./routes/dashboard.js"
+
 config({ path: resolve(import.meta.dirname, "../.env") })
 
 const app = express()
@@ -83,6 +85,8 @@ app.use("/api/articulos", articulosRouter)
 app.use("/api/stock", stockRouter)
 
 app.use("/api/remitos", remitosRouter)
+
+app.use("/api/dashboard", dashboardRouter)
 
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok" })
