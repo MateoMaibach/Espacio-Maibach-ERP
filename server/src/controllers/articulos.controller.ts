@@ -142,72 +142,51 @@ export function update(req: Request, res: Response) {
     return
   }
 
+  let costoNuevo: number | null = null
+
   if (costoUnitario !== undefined) {
-    const costo = Math.round(Number(costoUnitario))
-    if (!Number.isFinite(costo) || costo < 0) {
+    const c = Math.round(Number(costoUnitario))
+
+    if (!Number.isFinite(c) || c < 0) {
       res.status(400).json({ error: "El costo de referencia no es válido" })
       return
     }
+
+    costoNuevo = c
   }
 
-  // TODO(calculos): este update no escribe en historial_costos, solo lo hace
-  // updateCosto. Como el front usa este endpoint y nunca el otro
-  // (api.ts exporta updateCostoArticulo pero nadie lo importa), editar el
-  // costo de un articulo deja historial_costos desactualizado y
-  // GET /api/stock/reportes/costos muestra el valor viejo.
-
-  db.update(articulos)
-    .set({
-      ...(codigo !== undefined && { codigo: codigo ? String(codigo).trim() : null }),
-      ...(nombre !== undefined && { nombre: String(nombre).trim() }),
-      ...(unidad !== undefined && { unidad: unidad ? String(unidad).trim() : "un" }),
-      ...(costoUnitario !== undefined && { costoUnitario: Math.round(Number(costoUnitario)) }),
-      ...(activo !== undefined && { activo: activo ? 1 : 0 }),
-    })
-    .where(eq(articulos.id, existing.id))
-    .run()
-
-  res.json({ ok: true })
-}
-
-export function updateCosto(req: Request, res: Response) {
-  const existing = buscarArticulo(req.params.id as string)
-  if (!existing) {
-    res.status(404).json({ error: "Artículo no encontrado" })
-    return
-  }
-
-  const costo = Math.round(Number(req.body.costoUnitario ?? req.body.costo))
-  if (!Number.isFinite(costo) || costo < 0) {
-    res.status(400).json({ error: "El costo de referencia no es válido" })
-    return
-  }
-
-  if (costo === existing.costoUnitario) {
-    res.json({ ok: true, costo })
-    return
-  }
+  // Mismo criterio que la recepcion de compras (compras.controller.ts): solo
+  // se registra historial si el costo cambio de verdad, y el update del
+  // articulo y la fila del historial van juntos en la misma transaccion.
+  const cambioCosto = costoNuevo !== null && costoNuevo !== existing.costoUnitario
 
   db.transaction((tx) => {
     tx.update(articulos)
-      .set({ costoUnitario: costo })
+      .set({
+        ...(codigo !== undefined && { codigo: codigo ? String(codigo).trim() : null }),
+        ...(nombre !== undefined && { nombre: String(nombre).trim() }),
+        ...(unidad !== undefined && { unidad: unidad ? String(unidad).trim() : "un" }),
+        ...(costoNuevo !== null && { costoUnitario: costoNuevo }),
+        ...(activo !== undefined && { activo: activo ? 1 : 0 }),
+      })
       .where(eq(articulos.id, existing.id))
       .run()
 
-    tx.insert(historialCostos)
-      .values({
-        id: idUnico("hct"),
-        articuloId: existing.id,
-        costo,
-        fecha: hoy(),
-        origen: req.body.origen === "compra" ? "compra" : "manual",
-        referenciaId: req.body.referenciaId ?? null,
-        createdAt: new Date(),
-      })
-      .run()
+    if (cambioCosto) {
+      tx.insert(historialCostos)
+        .values({
+          id: idUnico("hct"),
+          articuloId: existing.id,
+          costo: costoNuevo as number,
+          fecha: hoy(),
+          origen: "manual",
+          createdAt: new Date(),
+        })
+        .run()
+    }
   })
 
-  res.json({ ok: true, costo })
+  res.json({ ok: true })
 }
 
 export function historialCostosByArticulo(req: Request, res: Response) {
@@ -229,6 +208,25 @@ export function historialCostosByArticulo(req: Request, res: Response) {
     if (ta !== tb) return ta - tb
     return a.id.localeCompare(b.id)
   })
+
+  // Los articulos editados antes de que update anotara el historial tienen el
+  // costo real fuera de la serie. Se antepone una fila sintetica con el costo
+  // vigente para que el modal no muestre un valor que ya no existe. No se
+  // escribe nada en la base: es solo lectura.
+
+  const ultimo = serie[serie.length - 1]
+
+  if (existing.costoUnitario > 0 && ultimo?.costo !== existing.costoUnitario) {
+    serie.push({
+      id: `hct_sintetico_${existing.id}`,
+      articuloId: existing.id,
+      costo: existing.costoUnitario,
+      fecha: hoy(),
+      origen: "manual",
+      referenciaId: null,
+      createdAt: new Date(),
+    })
+  }
 
   const conVariacion = serie.map((r, i) => {
     const anterior = i > 0 ? serie[i - 1].costo : null

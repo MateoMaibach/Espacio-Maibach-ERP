@@ -523,9 +523,15 @@ export function getReporteCostos(_req: Request, res: Response) {
       .limit(2)
       .all()
 
-    const actual = historial[0]?.costo ?? a.costoUnitario
-    const anterior = historial[1]?.costo ?? null
-    const variacion =
+// El costo actual sale de articulos.costoUnitario, que es la fuente de
+// verdad. Antes se tomaba historial[0], lo que hacia que un articulo
+// editado sin registrar (o editado antes de que update anotara el
+// historial) mostrara el costo viejo indefinidamente.
+
+const actual = a.costoUnitario
+const anterior =
+      historial.find((h) => h.costo !== actual)?.costo ?? null
+const variacion =
       anterior === null || anterior === 0
         ? null
         : Math.round(((actual - anterior) / anterior) * 1000) / 10
