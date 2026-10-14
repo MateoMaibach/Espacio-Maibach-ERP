@@ -9,6 +9,7 @@ import Proveedores from "@/pages/Proveedores";
 import ProveedorDetalle from "@/pages/ProveedorDetalle";
 import Stock from "@/pages/Stock";
 import Logistica from "@/pages/Logistica";
+import Finanzas from "@/pages/Finanzas";
 
 export default function App() {
   return (
@@ -24,6 +25,7 @@ export default function App() {
         <Route path="/proveedores/:id" element={<ProveedorDetalle />} />
         <Route path="/stock" element={<Stock />} />
         <Route path="/logistica" element={<Logistica />} />
+        <Route path="/finanzas" element={<Finanzas />} />
       </Routes>
     </BrowserRouter>
   );

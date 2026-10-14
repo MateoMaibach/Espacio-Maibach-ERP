@@ -67,27 +67,31 @@ interface FicheroData {
 
   total: string;
 
-  costos: {
-    venta: string;
+  // Insumos: numerico en la base, se formatea solo para mostrar.
+  costoPiscina: number;
 
-    proveedor: string;
+  costoInstalacion: number;
 
-    costoPiscina: string;
+  costoEquipoFiltrado: number;
 
-    instalacion: string;
+  costoManoObra: number;
 
-    equipoFiltrado: string;
+  manoObraVeredaAplica: number;
 
-    manoObraVereda: string;
+  comisionPct: number;
 
-    comision: string;
+  proveedor: string | null;
 
-    totalCostos: string;
+  // Derivados: los calcula el server en cada lectura, no se guardan.
+  venta: number;
 
-    margenNeto: string;
+  comisionMonto: number;
 
-    margenPct: string;
-  };
+  totalCostos: number;
+
+  margenNeto: number;
+
+  margenPct: number;
 
   cuotas: Cuota[];
 }
@@ -145,32 +149,17 @@ function mapCuota(c: any): Cuota {
 function mapFichero(raw: any, cuotasRaw: any[]): FicheroData {
   let items: { desc: string; cant: string; precio: string }[] = [];
 
-  let costos: FicheroData["costos"] = {
-    venta: "",
-    proveedor: "",
-    costoPiscina: "",
-    instalacion: "",
-
-    equipoFiltrado: "",
-    manoObraVereda: "",
-    comision: "",
-
-    totalCostos: "",
-    margenNeto: "",
-    margenPct: "",
-  };
-
   try {
     items = JSON.parse(raw.items || "[]");
   } catch {
     /* ok */
   }
 
-  try {
-    costos = JSON.parse(raw.costos || "{}");
-  } catch {
-    /* ok */
-  }
+  const num = (v: unknown) => {
+    const n = Number(v);
+
+    return Number.isFinite(n) ? n : 0;
+  };
 
   return {
     fecha: raw.fecha,
@@ -183,7 +172,29 @@ function mapFichero(raw: any, cuotasRaw: any[]): FicheroData {
 
     total: raw.total || "$0",
 
-    costos,
+    costoPiscina: num(raw.costoPiscina),
+
+    costoInstalacion: num(raw.costoInstalacion),
+
+    costoEquipoFiltrado: num(raw.costoEquipoFiltrado),
+
+    costoManoObra: num(raw.costoManoObra),
+
+    manoObraVeredaAplica: num(raw.manoObraVeredaAplica) === 0 ? 0 : 1,
+
+    comisionPct: num(raw.comisionPct),
+
+    proveedor: raw.proveedor ?? null,
+
+    venta: num(raw.venta ?? raw.total),
+
+    comisionMonto: num(raw.comisionMonto),
+
+    totalCostos: num(raw.totalCostos),
+
+    margenNeto: num(raw.margenNeto),
+
+    margenPct: num(raw.margenPct),
 
     cuotas: cuotasRaw.map(mapCuota),
   };
@@ -535,12 +546,6 @@ export default function ClienteDetalle() {
 
     const comisionPctVal = parseCurrencyInput(ficheroForm.comisionPct);
 
-    const comisionStr = `${comisionPctVal}% (${formatCurrency(comisionDolar)})`;
-
-    const proveedorNombre =
-      proveedores.find((p) => p.id === ficheroForm.proveedorPiscina)?.razonSocial ??
-      "Sin proveedor";
-
     const itemsGuardados = ficheroForm.items
 
       .filter((item) => item.desc.trim() && parseCurrencyInput(item.precioUnitario) > 0)
@@ -559,41 +564,34 @@ export default function ClienteDetalle() {
         };
       });
 
-    const costos = {
-      venta: formatCurrency(importeTotal),
-
-      proveedor: proveedorNombre,
-
-      costoPiscina: formatCurrency(costoPiscina),
-
-      instalacion: formatCurrency(costoInst),
-
-      equipoFiltrado: formatCurrency(costoEquipo),
-
-      manoObraVereda: ficheroForm.manoObraVereda ? formatCurrency(costoManoObra) : "No aplica",
-
-      comision: formatCurrency(comisionDolar),
-
-      totalCostos: formatCurrency(totalCostos),
-
-      margenNeto: formatCurrency(margenNeto),
-
-      margenPct: `${margenPct.toFixed(1)}%`,
-    };
-
     try {
       await saveFichero(id, {
         fecha: ficheroForm.fecha,
 
         vendedor: ficheroForm.vendedor,
 
-        comision: comisionStr,
-
         items: itemsGuardados,
 
         total: formatCurrency(importeTotal),
 
-        costos,
+        // Insumos numericos. Los derivados (comisionMonto, totalCostos,
+        // margen) los calcula el server, asi que no se mandan.
+        comisionPct: comisionPctVal,
+
+        costoPiscina,
+
+        costoInstalacion: costoInst,
+
+        costoEquipoFiltrado: costoEquipo,
+
+        costoManoObra,
+
+        manoObraVeredaAplica: ficheroForm.manoObraVereda,
+
+        proveedor: ficheroForm.proveedorPiscina
+          ? (proveedores.find((p) => p.id === ficheroForm.proveedorPiscina)
+              ?.razonSocial ?? null)
+          : null,
 
         tipoCobro: ficheroForm.tipoCobro,
 
@@ -877,6 +875,53 @@ export default function ClienteDetalle() {
 
   // --- Edit/Delete Client handlers ---
 
+  /**
+ * Precarga el modal con el fichero ya cargado. Antes no existia forma de
+ * editarlo: el modal solo se abria cuando el cliente no tenia ninguno.
+ */
+function handleOpenEditarFichero() {
+    if (!cliente?.fichero) return;
+
+    const f = cliente.fichero;
+
+    setFicheroForm({
+      fecha: f.fecha,
+
+      vendedor: f.vendedor,
+
+      comisionPct: String(f.comisionPct ?? 0),
+
+      items: f.items.map((i) => ({
+        desc: i.desc,
+
+        cant: i.cant?.includes("Cant:") ? i.cant.split("Cant:")[1]?.split("×")[0]?.trim() ?? "1" : (i.cant || "1"),
+
+        precioUnitario: (i.precio || "").replace(/[^0-9]/g, ""),
+      })),
+
+      proveedorPiscina:
+        proveedores.find((p) => p.razonSocial === f.proveedor)?.id ?? "",
+
+      costoPiscina: String(f.costoPiscina || 0),
+
+      costoInstalacion: String(f.costoInstalacion || 0),
+
+      equipoFiltrado: String(f.costoEquipoFiltrado || 0),
+
+      manoObraVereda: f.manoObraVeredaAplica === 1,
+
+      costoManoObra: String(f.costoManoObra || 0),
+
+      tipoCobro: "cuotas",
+
+      cantCuotas: f.cuotas.filter((c) => c.nro > 0).length || 1,
+    });
+
+    setShowFicheroMenu(false);
+
+    setShowFicheroModal(true);
+  }
+
   function handleOpenEditCliente() {
     if (!cliente) return;
 
@@ -1083,6 +1128,22 @@ export default function ClienteDetalle() {
                           />
                         </svg>
                         Editar Cliente
+                      </button>
+                      <div className="my-[4px]" style={{ borderTop: "1px solid #e2e8f0" }} />
+                      <button
+                        onClick={() => handleOpenEditarFichero()}
+                        className="w-full flex items-center gap-[8px] px-[12px] py-[8px] text-left font-['Geist:Regular',sans-serif] text-[13px] text-[#0f172a] hover:bg-[#f1f5f9] transition-colors"
+                      >
+                        <svg fill="none" height="14" viewBox="0 0 16 16" width="14">
+                          <path
+                            d="M2.5 4.5H13.5M4 2.5H12V5L6 11L3 10L2 7L8 1"
+                            stroke="#64748b"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="1.5"
+                          />
+                        </svg>
+                        Editar Fichero
                       </button>
                       <div className="my-[4px]" style={{ borderTop: "1px solid #e2e8f0" }} />
                       <button
@@ -1361,40 +1422,47 @@ export default function ClienteDetalle() {
                       {[
                         {
                           label: "Proveedor Piscina",
-                          value: cliente.fichero!.costos.proveedor,
+                          value: cliente.fichero!.proveedor ?? "—",
                           color: "#0f172a",
                         },
 
                         {
                           label: "Costo Piscina",
-                          value: cliente.fichero!.costos.costoPiscina,
+                          value: formatCurrency(cliente.fichero!.costoPiscina),
                           color: "#ef4444",
                         },
 
                         {
                           label: "Instalación",
-                          value: cliente.fichero!.costos.instalacion,
+                          value: formatCurrency(cliente.fichero!.costoInstalacion),
                           color: "#ef4444",
                         },
 
                         {
                           label: "Equipo de Filtrado",
-                          value: cliente.fichero!.costos.equipoFiltrado,
+                          value: formatCurrency(
+                            cliente.fichero!.costoEquipoFiltrado,
+                          ),
                           color: "#ef4444",
                         },
 
                         {
                           label: "Mano de Obra Vereda",
-                          value: cliente.fichero!.costos.manoObraVereda,
+                          value:
+                            cliente.fichero!.manoObraVeredaAplica === 1
+                              ? formatCurrency(cliente.fichero!.costoManoObra)
+                              : "No aplica",
                           color:
-                            cliente.fichero!.costos.manoObraVereda === "No aplica"
-                              ? "#94a3b8"
-                              : "#ef4444",
+                            cliente.fichero!.manoObraVeredaAplica === 1
+                              ? "#ef4444"
+                              : "#94a3b8",
                         },
 
                         {
                           label: "Comisión Vendedor",
-                          value: cliente.fichero!.costos.comision,
+                          value: `${cliente.fichero!.comisionPct}% (${formatCurrency(
+                            cliente.fichero!.comisionMonto,
+                          )})`,
                           color: "#ef4444",
                         },
                       ].map((r) => (
@@ -1418,7 +1486,7 @@ export default function ClienteDetalle() {
                           Total Costos
                         </p>
                         <p className="font-['Geist:Bold',sans-serif] font-bold text-[#ef4444] text-[14px]">
-                          {cliente.fichero!.costos.totalCostos}
+                          {formatCurrency(cliente.fichero!.totalCostos)}
                         </p>
                       </div>
                       <div
@@ -1430,10 +1498,10 @@ export default function ClienteDetalle() {
                         </p>
                         <div className="flex items-center gap-[8px]">
                           <p className="font-['Geist:Bold',sans-serif] font-bold text-[#10b981] text-[15px]">
-                            {cliente.fichero!.costos.margenNeto}
+                            {formatCurrency(cliente.fichero!.margenNeto)}
                           </p>
                           <span className="bg-[#d1fae5] text-[#10b981] font-['Geist:SemiBold',sans-serif] font-semibold text-[11px] px-[6px] py-[2px] rounded-[4px]">
-                            {cliente.fichero!.costos.margenPct}
+                            {cliente.fichero!.margenPct}%
                           </span>
                         </div>
                       </div>

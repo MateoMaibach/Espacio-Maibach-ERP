@@ -30,6 +30,15 @@ function ddMonDe(mes, anio, dia) {
 
 let creadas = 0
 
+// Nombres de proveedor de insumos, usados antes de crearlos en la base para
+// que el campo `proveedor` del fichero referencie algo coherente.
+const PROVEEDORES_SEED = [
+  "Química del Plata SRL",
+  "Hierros San Juan SA",
+  "Pisos y Revestimientos SA",
+  "Bombas y Motores SRL",
+]
+
 async function api(path, method = "GET", body) {
   const res = await fetch(`${BASE}${path}`, {
     method,
@@ -208,7 +217,6 @@ const mesFichero = mesRel(i < 5 ? -(5 - i) : 0)
       {
         fecha: mesFichero.ddmm,
         vendedor: "Martín Maibach",
-        comision: "10%",
         tipoCobro: "cuotas",
         cantCuotas,
         total: `$${total.toLocaleString("es-AR")}`,
@@ -220,6 +228,17 @@ const mesFichero = mesRel(i < 5 ? -(5 - i) : 0)
             precioUnitario: `$${total.toLocaleString("es-AR")}`,
           },
         ],
+
+        // Insumos de obra. Varian por cliente para que el analisis de
+        // costos en /finanzas tenga una dispersion realista y no todos los
+        // margenes iguales.
+        comisionPct: 8 + (i % 4),
+        costoPiscina: Math.round(total * (0.34 + (i % 3) * 0.03)),
+        costoInstalacion: Math.round(total * (0.12 + (i % 2) * 0.02)),
+        costoEquipoFiltrado: Math.round(total * 0.08),
+        costoManoObra: i % 4 === 3 ? 0 : Math.round(total * 0.06),
+        manoObraVeredaAplica: i % 4 !== 3,
+        proveedor: PROVEEDORES_SEED[i % PROVEEDORES_SEED.length],
       },
       `fichero ${nombre}`,
     )
@@ -453,10 +472,19 @@ const mesFichero = mesRel(i < 5 ? -(5 - i) : 0)
       monto: Math.round(gastos * 0.7),
       tipo: "egreso",
       subCaja: "Bancos",
-      categoria: "Proveedores",
+      categoria: "Pago proveedor",
     }, "proveedores")
 
     if (m === 0) {
+      await crear("/api/caja/movimientos", "POST", {
+        fecha: base.iso,
+        concepto: "Carga de combustible",
+        monto: 85000,
+        tipo: "egreso",
+        subCaja: "Efectivo",
+        categoria: "Combustible",
+      }, "combustible")
+
       await crear("/api/caja/movimientos", "POST", {
         fecha: base.iso,
         concepto: "Venta de combustible",

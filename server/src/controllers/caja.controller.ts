@@ -4,9 +4,15 @@ import { idUnico } from "../utils/id.js"
 
 import { db } from "../db/index.js"
 
-import { movimientos, cierres, cajas } from "../db/schema.js"
+import { movimientos, cierres, cajas, categorias } from "../db/schema.js"
 
 import { eq } from "drizzle-orm"
+
+import { CAT_AJUSTE_CIERRE } from "./categorias.controller.js"
+
+import { montoEnARS, sumarEnARS, sumarMontosEnARS } from "../services/moneda.js"
+
+import { assertMesAbierto } from "../services/periodos.service.js"
 
 function getCurrentDateStr(): string {
   const now = new Date()
@@ -26,6 +32,43 @@ function parseFecha(fecha: string): { mes: number; anio: number } | null {
   if (isNaN(anio) || isNaN(mes) || mes < 1 || mes > 12) return null
 
   return { mes, anio }
+}
+
+/**
+ * Valida que la categoria exista en el catalogo y sea del tipo correcto del
+ * movimiento. Devuelve el nombre limpio (o null para "sin categoría") y un
+ * mensaje de error si no corresponde.
+ */
+function validarCategoria(
+  valor: unknown,
+  tipo: string,
+): { valor: string | null; error: string | null } {
+  if (valor === undefined || valor === null || valor === "") {
+    return { valor: null, error: null }
+  }
+
+  const nombre = String(valor).trim()
+
+  if (!nombre) return { valor: null, error: null }
+
+  const categoria = db
+    .select({ id: categorias.id, tipo: categorias.tipo })
+    .from(categorias)
+    .where(eq(categorias.nombre, nombre))
+    .get()
+
+  if (!categoria) {
+    return { valor: null, error: `La categoría "${nombre}" no existe` }
+  }
+
+  if (categoria.tipo !== tipo) {
+    return {
+      valor: null,
+      error: `La categoría "${nombre}" es de tipo ${categoria.tipo} y no puede usarse en un ${tipo}`,
+    }
+  }
+
+  return { valor: nombre, error: null }
 }
 
 export function getMonedas(_req: Request, res: Response) {
@@ -118,9 +161,25 @@ export function createMovimiento(req: Request, res: Response) {
     return
   }
 
+  const categoriaFinal = validarCategoria(categoria, tipo)
+
+  if (categoriaFinal.error) {
+    res.status(400).json({ error: categoriaFinal.error })
+
+    return
+  }
+
   const id = idUnico("mov")
 
   const fechaStr = fecha || getCurrentDateStr()
+
+  try {
+    assertMesAbierto(fechaStr)
+  } catch (e) {
+    res.status(409).json({ error: (e as Error).message })
+
+    return
+  }
 
   const monedaStr = moneda || "ARS"
 
@@ -142,7 +201,7 @@ export function createMovimiento(req: Request, res: Response) {
 
       tipoCambio: tipoCambio || null,
 
-      categoria: categoria || null,
+      categoria: categoriaFinal.valor,
 
       comprobante: comprobante || null,
 
@@ -181,8 +240,33 @@ export function updateMovimiento(req: Request, res: Response) {
     observaciones,
   } = req.body
 
+  // Bloquea tanto mover el movimiento hacia un mes cerrado como editarlo si
+  // ya está en uno.
+  try {
+    if (fecha !== undefined) assertMesAbierto(String(fecha))
+
+    assertMesAbierto(existing.fecha)
+  } catch (e) {
+    res.status(409).json({ error: (e as Error).message })
+
+    return
+  }
+
   if (tipo !== undefined && tipo !== "ingreso" && tipo !== "egreso") {
     res.status(400).json({ error: "Tipo debe ser 'ingreso' o 'egreso'" })
+
+    return
+  }
+
+  // "" o null significan "quitar la categoría". Antes el front mandaba
+  // undefined y el spread lo salteaba, así que no se podía limpiar.
+  const tocaCategoria = "categoria" in req.body
+  const categoriaFinal = tocaCategoria
+    ? validarCategoria(categoria, tipo ?? existing.tipo)
+    : { valor: undefined, error: null as string | null }
+
+  if (categoriaFinal.error) {
+    res.status(400).json({ error: categoriaFinal.error })
 
     return
   }
@@ -203,7 +287,7 @@ export function updateMovimiento(req: Request, res: Response) {
 
       ...(tipoCambio !== undefined && { tipoCambio }),
 
-      ...(categoria !== undefined && { categoria }),
+      ...(tocaCategoria && { categoria: categoriaFinal.valor }),
 
       ...(comprobante !== undefined && { comprobante }),
 
@@ -224,6 +308,14 @@ export function deleteMovimiento(req: Request, res: Response) {
 
   if (!existing) {
     res.status(404).json({ error: "Movimiento no encontrado" })
+
+    return
+  }
+
+  try {
+    assertMesAbierto(existing.fecha)
+  } catch (e) {
+    res.status(409).json({ error: (e as Error).message })
 
     return
   }
@@ -284,9 +376,7 @@ export function getCierresPreview(req: Request, res: Response) {
     return parsed.mes === mes && parsed.anio === anio && m.subCaja === subCaja
   })
 
-  const saldoFinal = mesMovimientos.reduce((acc, m) => {
-    return acc + (m.tipo === "ingreso" ? m.monto : -m.monto)
-  }, 0)
+  const { total: saldoFinal } = sumarEnARS(mesMovimientos)
 
   const lastCierre = db
     .select()
@@ -330,9 +420,13 @@ export function realizarCierre(req: Request, res: Response) {
     return parsed.mes === mes && parsed.anio === anio && m.subCaja === subCaja
   })
 
-  const saldoFinal = mesMovimientos.reduce((acc, m) => {
-    return acc + (m.tipo === "ingreso" ? m.monto : -m.monto)
-  }, 0)
+  const { total: saldoFinal, sinConvertir } = sumarEnARS(mesMovimientos)
+
+  if (sinConvertir > 0) {
+    console.warn(
+      `[caja] ${sinConvertir} movimiento(s) en moneda extranjera sin tipo de cambio quedan fuera del cierre`,
+    )
+  }
 
   const lastCierre = db
     .select()
@@ -373,7 +467,7 @@ export function realizarCierre(req: Request, res: Response) {
 
         moneda: "ARS",
 
-        categoria: "Ajuste por cierre",
+        categoria: CAT_AJUSTE_CIERRE,
 
         observaciones:
           observaciones || `Diferencia de $${diff.toLocaleString("es-AR")}`,
@@ -444,6 +538,18 @@ export function calcularResumenCaja(mes: number, anio: number): ResumenCaja {
     .all()
     .filter((c) => c.activa === 1)
 
+  // Todos los montos se convierten a ARS con el tipo de cambio del
+  // movimiento. Los que no se pueden convertir se informs por log para que
+  // no contaminen el total en silencio.
+  const sinConvertir = mesMovimientos.filter((m) => !montoEnARS(m).convertible)
+
+  if (sinConvertir.length > 0) {
+    console.warn(
+      `[caja] ${sinConvertir.length} movimiento(s) sin tipo de cambio quedan fuera del resumen: ` +
+        sinConvertir.map((m) => `${m.id} (${m.moneda} ${m.monto})`).join(", "),
+    )
+  }
+
   const resumen: Record<string, {
     total: number
     ingresos: number
@@ -455,13 +561,13 @@ export function calcularResumenCaja(mes: number, anio: number): ResumenCaja {
       (m) => m.subCaja === cajaItem.nombre,
     )
 
-    const ingresos = scMovimientos
-      .filter((m) => m.tipo === "ingreso")
-      .reduce((acc, m) => acc + m.monto, 0)
+    const ingresos = sumarMontosEnARS(
+      scMovimientos.filter((m) => m.tipo === "ingreso"),
+    ).total
 
-    const egresos = scMovimientos
-      .filter((m) => m.tipo === "egreso")
-      .reduce((acc, m) => acc + m.monto, 0)
+    const egresos = sumarMontosEnARS(
+      scMovimientos.filter((m) => m.tipo === "egreso"),
+    ).total
 
     resumen[cajaItem.nombre] = { total: ingresos - egresos, ingresos, egresos }
   }
@@ -472,13 +578,13 @@ export function calcularResumenCaja(mes: number, anio: number): ResumenCaja {
     return caja ? caja.afectaGeneral === 1 : true
   })
 
-  const totalIngresos = generalMovimientos
-    .filter((m) => m.tipo === "ingreso")
-    .reduce((acc, m) => acc + m.monto, 0)
+  const totalIngresos = sumarMontosEnARS(
+    generalMovimientos.filter((m) => m.tipo === "ingreso"),
+  ).total
 
-  const totalEgresos = generalMovimientos
-    .filter((m) => m.tipo === "egreso")
-    .reduce((acc, m) => acc + m.monto, 0)
+  const totalEgresos = sumarMontosEnARS(
+    generalMovimientos.filter((m) => m.tipo === "egreso"),
+  ).total
 
   return {
     subCajas: resumen,

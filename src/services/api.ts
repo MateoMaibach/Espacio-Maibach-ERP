@@ -75,20 +75,31 @@ export function saveFichero(
 
     vendedor: string;
 
-    comision?: string;
-
     items?: any[];
 
     total?: string;
 
-    costos?: any;
+    /** Porcentaje de comisión del vendedor, ej. 8 o 8.5 */
+    comisionPct?: number;
+
+    costoPiscina?: number;
+
+    costoInstalacion?: number;
+
+    costoEquipoFiltrado?: number;
+
+    costoManoObra?: number;
+
+    manoObraVeredaAplica?: boolean;
+
+    proveedor?: string | null;
 
     tipoCobro?: string;
 
     cantCuotas?: number;
   },
 ) {
-  return request<{ ok: true }>(`/clientes/${clienteId}/fichero`, {
+  return request<{ ok: true; id: string }>(`/clientes/${clienteId}/fichero`, {
     method: "POST",
     body: JSON.stringify(data),
   });
@@ -268,7 +279,7 @@ export function createMovimiento(data: {
 
   tipoCambio?: number;
 
-  categoria?: string;
+  categoria?: string | null;
 
   comprobante?: string;
 
@@ -1468,6 +1479,184 @@ export function createRemito(data: {
 
 export function anularRemito(id: string) {
   return request<{ ok: true; estado: RemitoEstado }>(`/remitos/${id}/anular`, {
+    method: "POST",
+  });
+}
+
+// --- Categorías ---
+
+export interface Categoria {
+  id: string;
+
+  nombre: string;
+
+  tipo: "ingreso" | "egreso";
+
+  activa: number;
+
+  color: string;
+
+  orden: number;
+
+  createdAt: Date;
+}
+
+export function getCategorias(params?: { tipo?: "ingreso" | "egreso" }) {
+  const qs = params?.tipo ? `?tipo=${params.tipo}` : "";
+
+  return request<Categoria[]>(`/categorias${qs}`);
+}
+
+export function getCategoriasUsadas() {
+  return request<{ categoria: string; n: number }[]>("/categorias/usadas");
+}
+
+export function createCategoria(data: {
+  nombre: string;
+
+  tipo: "ingreso" | "egreso";
+
+  color?: string;
+
+  orden?: number;
+}) {
+  return request<{ ok: true; id: string }>("/categorias", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateCategoria(
+  id: string,
+  data: Partial<{
+    nombre: string;
+
+    tipo: "ingreso" | "egreso";
+
+    color: string;
+
+    orden: number;
+
+    activa: number;
+  }>,
+) {
+  return request<{ ok: true }>(`/categorias/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteCategoria(id: string) {
+  return request<{ ok: true }>(`/categorias/${id}`, { method: "DELETE" });
+}
+
+// --- Períodos (cierre mensual) ---
+
+export interface SnapshotCostes {
+  costoPiscina: number;
+
+  costoInstalacion: number;
+
+  costoEquipoFiltrado: number;
+
+  costoManoObra: number;
+
+  comision: number;
+
+  total: number;
+}
+
+export interface Snapshot {
+  mes: number;
+
+  anio: number;
+
+  generadoEn: string;
+
+  ventas: { total: number; cantidad: number };
+
+  costes: SnapshotCostes;
+
+  resultado: { bruto: number; neto: number; margenPct: number };
+
+  caja: {
+    ingresos: number;
+
+    egresos: number;
+
+    gananciaNeta: number;
+
+    porSubCaja: Record<
+      string,
+      { ingresos: number; egresos: number; total: number }
+    >;
+  };
+
+  egresosPorCategoria: {
+    categoria: string;
+
+    total: number;
+
+    movimientos: number;
+  }[];
+
+  cuentasAPagar: number;
+
+  carteraCheques: number;
+
+  cuotasVencidas: number;
+
+  montoVencido: number;
+
+  avisos: string[];
+}
+
+export interface Periodo {
+  id: string;
+
+  mes: number;
+
+  anio: number;
+
+  estado: "abierto" | "cerrado";
+
+  fechaCierre: string | null;
+
+  observaciones: string | null;
+
+  snapshotCerrado: boolean;
+}
+
+export function getPeriodos() {
+  return request<Periodo[]>("/periodos");
+}
+
+export function getPeriodo(mes: number, anio: number) {
+  return request<Periodo & { snapshot: Snapshot | null }>(
+    `/periodos/${mes}/${anio}`,
+  );
+}
+
+export function getPeriodoPreview(mes: number, anio: number) {
+  return request<Snapshot>(`/periodos/${mes}/${anio}/preview`);
+}
+
+export function cerrarPeriodo(
+  mes: number,
+  anio: number,
+  observaciones?: string,
+) {
+  return request<{ ok: true; id: string; snapshot: Snapshot }>(
+    `/periodos/${mes}/${anio}/cerrar`,
+    {
+      method: "POST",
+      body: JSON.stringify({ observaciones }),
+    },
+  );
+}
+
+export function abrirPeriodo(mes: number, anio: number) {
+  return request<{ ok: true }>(`/periodos/${mes}/${anio}/abrir`, {
     method: "POST",
   });
 }

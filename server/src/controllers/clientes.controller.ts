@@ -6,6 +6,8 @@ import { clientes, ficheros, cuotas } from "../db/schema.js"
 
 import { eq } from "drizzle-orm"
 
+import { conDerivados } from "./ficheros.controller.js"
+
 export function getAll(_req: Request, res: Response) {
   const all = db.select().from(clientes).all()
 
@@ -41,7 +43,11 @@ export function getById(req: Request, res: Response) {
       .all()
   }
 
-  res.json({ ...cliente, fichero, cuotas: cuotasList })
+  res.json({
+    ...cliente,
+    fichero: fichero ? conDerivados(fichero) : null,
+    cuotas: cuotasList,
+  })
 }
 
 export function create(req: Request, res: Response) {

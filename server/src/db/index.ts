@@ -56,6 +56,13 @@ sqlite.exec(`
     comision TEXT,
     items TEXT NOT NULL DEFAULT '[]',
     total TEXT NOT NULL DEFAULT '$0',
+    costo_piscina INTEGER NOT NULL DEFAULT 0,
+    costo_instalacion INTEGER NOT NULL DEFAULT 0,
+    costo_equipo_filtrado INTEGER NOT NULL DEFAULT 0,
+    costo_mano_obra INTEGER NOT NULL DEFAULT 0,
+    comision_pct REAL NOT NULL DEFAULT 0,
+    proveedor TEXT,
+    mano_obra_vereda_aplica INTEGER NOT NULL DEFAULT 1,
     costos TEXT,
     tipo_cobro TEXT NOT NULL DEFAULT 'libre',
     cant_cuotas INTEGER NOT NULL DEFAULT 0,
@@ -117,6 +124,31 @@ sqlite.exec(`
     fecha TEXT NOT NULL,
     fecha_cierre TEXT NOT NULL,
     observaciones TEXT,
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS periodos (
+    id TEXT PRIMARY KEY,
+    mes INTEGER NOT NULL,
+    anio INTEGER NOT NULL,
+    estado TEXT NOT NULL DEFAULT 'abierto',
+    snapshot TEXT,
+    observaciones TEXT,
+    fecha_cierre TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+
+  CREATE UNIQUE INDEX IF NOT EXISTS periodos_mes_anio_uq
+    ON periodos (mes, anio);
+
+  CREATE TABLE IF NOT EXISTS categorias (
+    id TEXT PRIMARY KEY,
+    nombre TEXT NOT NULL UNIQUE,
+    tipo TEXT NOT NULL,
+    activa INTEGER NOT NULL DEFAULT 1,
+    color TEXT NOT NULL DEFAULT '#64748b',
+    orden INTEGER NOT NULL DEFAULT 0,
     created_at INTEGER NOT NULL
   );
 
@@ -324,6 +356,36 @@ function agregarColumnaSiFalta(
 
 agregarColumnaSiFalta("ficheros", "pago_inicial", "INTEGER NOT NULL DEFAULT 0")
 
+// Costes normalizados: antes vivian dentro del JSON `costos` como strings.
+// Si las columnas no existen las agrega; el volcado de datos a estas columnas
+// lo hace scripts/migrar-costos.mjs.
+
+agregarColumnaSiFalta("ficheros", "costo_piscina", "INTEGER NOT NULL DEFAULT 0")
+
+agregarColumnaSiFalta(
+  "ficheros",
+  "costo_instalacion",
+  "INTEGER NOT NULL DEFAULT 0",
+)
+
+agregarColumnaSiFalta(
+  "ficheros",
+  "costo_equipo_filtrado",
+  "INTEGER NOT NULL DEFAULT 0",
+)
+
+agregarColumnaSiFalta("ficheros", "costo_mano_obra", "INTEGER NOT NULL DEFAULT 0")
+
+agregarColumnaSiFalta("ficheros", "comision_pct", "REAL NOT NULL DEFAULT 0")
+
+agregarColumnaSiFalta("ficheros", "proveedor", "TEXT")
+
+agregarColumnaSiFalta(
+  "ficheros",
+  "mano_obra_vereda_aplica",
+  "INTEGER NOT NULL DEFAULT 1",
+)
+
 try {
   sqlite.prepare("SELECT aplica_pago_proveedor FROM cheques LIMIT 1").get()
 } catch {
@@ -352,6 +414,47 @@ if (cajasCount.count === 0) {
   insertCaja.run("caj_3", "Cheques", "#f59e0b", 3, 1, 1, now)
 
   insertCaja.run("caj_4", "Dólares", "#10b981", 4, 1, 0, now)
+}
+
+// Catalogo de categorias de movimientos. Se inserta con INSERT OR IGNORE para
+// agregar las nuevas sin pisar los ajustes de orden/color que haya hecho el
+// usuario, y sin duplicar las que ya existen.
+
+const CATEGORIAS_INICIALES: [string, string, string][] = [
+  // ingresos
+  ["Cobro cliente", "ingreso", "#10b981"],
+  ["Cobro cuota", "ingreso", "#10b981"],
+  ["Seña", "ingreso", "#10b981"],
+  ["Transferencia recibida", "ingreso", "#0ea5e9"],
+  ["Devolución", "ingreso", "#f59e0b"],
+  ["Otro", "ingreso", "#64748b"],
+  // egresos
+  ["Pago proveedor", "egreso", "#ef4444"],
+  ["Combustible", "egreso", "#f97316"],
+  ["Logística", "egreso", "#f97316"],
+  ["Insumos", "egreso", "#8b5cf6"],
+  ["Materiales", "egreso", "#8b5cf6"],
+  ["Sueldos", "egreso", "#0ea5e9"],
+  ["Alquiler", "egreso", "#0ea5e9"],
+  ["Servicios", "egreso", "#0ea5e9"],
+  ["Impuestos", "egreso", "#64748b"],
+  ["Mantenimiento", "egreso", "#64748b"],
+  ["Herramientas", "egreso", "#64748b"],
+  ["Papelería", "egreso", "#64748b"],
+  ["Publicidad", "egreso", "#64748b"],
+  ["Ajuste por cierre", "egreso", "#94a3b8"],
+]
+
+{
+  const insertCat = sqlite.prepare(
+    "INSERT OR IGNORE INTO categorias (id, nombre, tipo, activa, color, orden, created_at) VALUES (?, ?, ?, 1, ?, ?, ?)",
+  )
+
+  const now = Date.now()
+
+  CATEGORIAS_INICIALES.forEach(([nombre, tipo, color], i) => {
+    insertCat.run(`cat_${nombre.toLowerCase().replace(/[^a-z0-9]+/g, "_")}`, nombre, tipo, color, i, now)
+  })
 }
 
 // Migration: add afecta_general column if missing
