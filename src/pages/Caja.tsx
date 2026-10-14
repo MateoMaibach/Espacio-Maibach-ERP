@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 
 import { useNavigate } from "react-router-dom";
 
@@ -24,6 +24,11 @@ import {
   updateBanco,
   deleteBanco,
   getMonedasCaja,
+  getCategorias,
+  createCategoria,
+  updateCategoria,
+  deleteCategoria,
+  type Categoria,
   type Movimiento,
   type ResumenCaja,
   type Cierre,
@@ -47,21 +52,6 @@ const MESES = [
 ];
 
 const DONUT_COLORS = ["#0ea5e9", "#f59e0b", "#10b981", "#7c3aed", "#ef4444", "#ec4899"];
-
-const CATEGORIAS_POR_TIPO: Record<string, string[]> = {
-  ingreso: ["Cobro cliente", "Seña", "Cobro cuota", "Devolución", "Transferencia recibida", "Otro"],
-
-  egreso: [
-    "Pago proveedor",
-    "Logística",
-    "Insumos",
-    "Sueldos",
-    "Alquiler",
-    "Servicios",
-    "Impuestos",
-    "Otro",
-  ],
-};
 
 function formatCurrency(value: number): string {
   return `$${value.toLocaleString("es-AR")}`;
@@ -333,7 +323,68 @@ export default function Caja() {
 
   const [monedas, setMonedas] = useState<string[]>(["ARS"]);
 
+  const [categorias, setCategorias] = useState<Categoria[]>([]);
+
+  const categoriasPorTipo = useMemo(
+    () => ({
+      ingreso: categorias.filter((c) => c.tipo === "ingreso"),
+      egreso: categorias.filter((c) => c.tipo === "egreso"),
+    }),
+    [categorias],
+  );
+
   const [showBancosAdmin, setShowBancosAdmin] = useState(false);
+
+  const [showCategoriasAdmin, setShowCategoriasAdmin] = useState(false);
+
+  const [nuevaCategoria, setNuevaCategoria] = useState({
+    nombre: "",
+    tipo: "egreso" as "ingreso" | "egreso",
+  });
+
+  const [categoriaError, setCategoriaError] = useState<string | null>(null);
+
+  async function handleCrearCategoria() {
+    if (!nuevaCategoria.nombre.trim()) return;
+
+    try {
+      await createCategoria(nuevaCategoria);
+
+      setNuevaCategoria({ nombre: "", tipo: nuevaCategoria.tipo });
+
+      setCategoriaError(null);
+
+      await cargarCategorias();
+    } catch (e) {
+      setCategoriaError(
+        e instanceof Error ? e.message : "No se pudo crear la categoría",
+      );
+    }
+  }
+
+  async function handleToggleCategoria(c: Categoria) {
+    try {
+      await updateCategoria(c.id, { activa: c.activa === 1 ? 0 : 1 });
+
+      await cargarCategorias();
+    } catch (e) {
+      setCategoriaError(
+        e instanceof Error ? e.message : "No se pudo actualizar",
+      );
+    }
+  }
+
+  async function handleBorrarCategoria(c: Categoria) {
+    try {
+      await deleteCategoria(c.id);
+
+      await cargarCategorias();
+    } catch (e) {
+      setCategoriaError(
+        e instanceof Error ? e.message : "No se pudo eliminar",
+      );
+    }
+  }
 
   const [showBancoModal, setShowBancoModal] = useState(false);
 
@@ -401,6 +452,14 @@ export default function Caja() {
     }
   }, []);
 
+  const cargarCategorias = useCallback(async () => {
+    try {
+      setCategorias(await getCategorias());
+    } catch {
+      setCategorias([]);
+    }
+  }, []);
+
   useEffect(() => {
     cargarCajas();
   }, [cargarCajas]);
@@ -412,6 +471,10 @@ export default function Caja() {
   useEffect(() => {
     cargarMonedas();
   }, [cargarMonedas]);
+
+  useEffect(() => {
+    cargarCategorias();
+  }, [cargarCategorias]);
 
   useEffect(() => {
     cargarDatos();
@@ -584,7 +647,7 @@ export default function Caja() {
 
       tipoCambio: form.tipoCambio ? Number(form.tipoCambio) : undefined,
 
-      categoria: form.categoria || undefined,
+      categoria: form.categoria || null,
 
       comprobante: form.comprobante || undefined,
 
@@ -875,6 +938,16 @@ export default function Caja() {
               Gestionar Bancos
             </button>
             <button
+              onClick={() => setShowCategoriasAdmin(!showCategoriasAdmin)}
+              className={`font-['Geist:Medium',sans-serif] font-medium text-[13px] px-[14px] py-[10px] rounded-[8px] transition-colors border ${
+                showCategoriasAdmin
+                  ? "bg-[#0f172a] text-white border-[#0f172a]"
+                  : "bg-white text-[#475569] border-[#e2e8f0] hover:bg-[#f8fafc]"
+              }`}
+            >
+              Gestionar Categorías
+            </button>
+            <button
               onClick={handleNuevoMovimiento}
               className="flex items-center gap-[8px] bg-[#0ea5e9] hover:bg-[#0284c7] transition-colors text-white font-['Geist:SemiBold',sans-serif] font-semibold text-[14px] px-[16px] py-[10px] rounded-[8px]"
             >
@@ -1000,6 +1073,137 @@ export default function Caja() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* Categorías Admin Section */}
+        {showCategoriasAdmin && (
+          <div
+            className="bg-white p-[20px] rounded-[12px]"
+            style={{ border: "1px solid #e2e8f0" }}
+          >
+            <div className="flex items-center justify-between mb-[16px]">
+              <div>
+                <p className="font-['Geist:Bold',sans-serif] font-bold text-[#0f172a] text-[16px]">
+                  Gestionar Categorías
+                </p>
+                <p className="font-['Geist:Regular',sans-serif] text-[#94a3b8] text-[12px] mt-[2px]">
+                  Rubros para clasificar ingresos y egresos. Se usan en el
+                  análisis de gastos de Finanzas.
+                </p>
+              </div>
+            </div>
+
+            {categoriaError && (
+              <div
+                className="rounded-[8px] p-[10px] mb-[12px]"
+                style={{ background: "#fef2f2" }}
+              >
+                <p className="font-['Geist:Regular',sans-serif] text-[#b91c1c] text-[12px]">
+                  {categoriaError}
+                </p>
+              </div>
+            )}
+
+            <div className="flex gap-[10px] mb-[16px]">
+              <input
+                value={nuevaCategoria.nombre}
+                onChange={(e) =>
+                  setNuevaCategoria((p) => ({ ...p, nombre: e.target.value }))
+                }
+                placeholder="Nombre de la categoría"
+                className="flex-1 font-['Geist:Regular',sans-serif] text-[14px] text-[#0f172a] px-[12px] py-[9px] rounded-[8px] outline-none border border-[#e2e8f0]"
+              />
+
+              <select
+                value={nuevaCategoria.tipo}
+                onChange={(e) =>
+                  setNuevaCategoria((p) => ({
+                    ...p,
+                    tipo: e.target.value as "ingreso" | "egreso",
+                  }))
+                }
+                className="font-['Geist:Regular',sans-serif] text-[14px] text-[#0f172a] px-[12px] py-[9px] rounded-[8px] outline-none border border-[#e2e8f0] bg-white cursor-pointer"
+              >
+                <option value="egreso">Egreso</option>
+                <option value="ingreso">Ingreso</option>
+              </select>
+
+              <button
+                onClick={handleCrearCategoria}
+                disabled={!nuevaCategoria.nombre.trim()}
+                className="flex items-center gap-[6px] bg-[#0ea5e9] hover:bg-[#0284c7] transition-colors text-white font-['Geist:SemiBold',sans-serif] font-semibold text-[13px] px-[12px] py-[8px] rounded-[8px] disabled:opacity-40"
+              >
+                <IconPlus /> Agregar
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-[16px]">
+              {(["ingreso", "egreso"] as const).map((tipo) => (
+                <div key={tipo} className="flex flex-col gap-[6px]">
+                  <p className="font-['Geist:SemiBold',sans-serif] font-semibold text-[#475569] text-[12px] uppercase tracking-wide">
+                    {tipo === "ingreso" ? "Ingresos" : "Egresos"}
+                  </p>
+
+                  {categoriasPorTipo[tipo].map((c) => (
+                    <div
+                      key={c.id}
+                      className="flex items-center justify-between px-[10px] py-[8px] rounded-[6px]"
+                      style={{
+                        border: "1px solid #f1f5f9",
+                        background: c.activa === 1 ? "#f8fafc" : "#fef2f2",
+                      }}
+                    >
+                      <div className="flex items-center gap-[8px]">
+                        <span
+                          className="size-[8px] rounded-full shrink-0"
+                          style={{ background: c.color }}
+                        />
+                        <span
+                          className="font-['Geist:Regular',sans-serif] text-[13px] line-through"
+                          style={{
+                            color: c.activa === 1 ? "#0f172a" : "#94a3b8",
+                          }}
+                        >
+                          {c.nombre}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-[4px]">
+                        <button
+                          onClick={() => handleToggleCategoria(c)}
+                          className="px-[8px] py-[4px] rounded-[4px] font-['Geist:Medium',sans-serif] font-medium text-[11px] hover:bg-[#e2e8f0] transition-colors"
+                          style={{ color: "#475569" }}
+                        >
+                          {c.activa === 1 ? "Desactivar" : "Activar"}
+                        </button>
+
+                        <button
+                          onClick={() => handleBorrarCategoria(c)}
+                          className="p-[4px] rounded-[4px] hover:bg-[#fee2e2] transition-colors"
+                          title="Eliminar"
+                        >
+                          <svg
+                            fill="none"
+                            height="14"
+                            viewBox="0 0 14 14"
+                            width="14"
+                          >
+                            <path
+                              d="M2 4H12M5 4V2H9V4M6 6.5V10.5M8 6.5V10.5M3 4L4 12H10L11 4"
+                              stroke="#ef4444"
+                              strokeWidth="1.2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -1441,13 +1645,22 @@ export default function Caja() {
 
                 const neta = sc ? sc.total : resumen?.gananciaNeta || 0;
 
+                // Los pagos a proveedores también se convierten a ARS: comparar el
+                // importe crudo mezclaría monedas en el mismo tile.
                 const pagosProveedores = (
                   filtroSubCaja !== "Todas" ? movimientosFiltrados : movimientos
                 )
 
                   .filter((m) => m.tipo === "egreso" && m.categoria === "Pago proveedor")
 
-                  .reduce((acc, m) => acc + m.monto, 0);
+                  .reduce(
+                    (acc, m) =>
+                      acc +
+                      (m.moneda === "ARS"
+                        ? m.monto
+                        : m.monto * (m.tipoCambio || 0)),
+                    0,
+                  );
 
                 return (
                   <>
@@ -1713,9 +1926,9 @@ export default function Caja() {
                     className="w-full font-['Geist:Regular',sans-serif] text-[14px] text-[#0f172a] px-[12px] py-[9px] rounded-[8px] outline-none border border-[#e2e8f0] bg-white cursor-pointer"
                   >
                     <option value="">Sin categoría</option>
-                    {(CATEGORIAS_POR_TIPO[form.tipo] || []).map((c) => (
-                      <option key={c} value={c}>
-                        {c}
+                    {(categoriasPorTipo[form.tipo] ?? []).map((c) => (
+                      <option key={c.id} value={c.nombre}>
+                        {c.nombre}
                       </option>
                     ))}
                   </select>

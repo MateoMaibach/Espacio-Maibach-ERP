@@ -42,6 +42,10 @@ import remitosRouter from "./routes/remitos.js"
 
 import dashboardRouter from "./routes/dashboard.js"
 
+import categoriasRouter from "./routes/categorias.js"
+
+import periodosRouter from "./routes/periodos.js"
+
 config({ path: resolve(import.meta.dirname, "../.env") })
 
 const app = express()
@@ -88,16 +92,23 @@ app.use("/api/remitos", remitosRouter)
 
 app.use("/api/dashboard", dashboardRouter)
 
+app.use("/api/categorias", categoriasRouter)
+
+app.use("/api/periodos", periodosRouter)
+
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok" })
 })
 
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
-  console.error(err)
+  // Editar un mes cerrado es un conflicto de dominio, no una falla interna.
+  const esMesCerrado = err.name === "MesCerradoError"
+
+  if (!esMesCerrado) console.error(err)
 
   // Los errores de express.json() (body malformado) traen su propio status.
 
-  const status = (err as { status?: number }).status ?? 500
+  const status = esMesCerrado ? 409 : ((err as { status?: number }).status ?? 500)
 
   res.status(status).json({ error: err.message || "Error interno del servidor" })
 })

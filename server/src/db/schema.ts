@@ -2,6 +2,7 @@ import {
   sqliteTable,
   text,
   integer,
+  real,
   uniqueIndex,
 } from "drizzle-orm/sqlite-core"
 
@@ -59,6 +60,29 @@ export const ficheros = sqliteTable("ficheros", {
   items: text("items").notNull().default("[]"),
 
   total: text("total").notNull().default("$0"),
+
+  // Insumos del negocio. Los derivados (comisionMonto, totalCostos,
+  // margenNeto, margenPct) NO se guardan: se calculan siempre desde estos
+  // numeros y el total del fichero, para que no puedan quedar desfasados.
+
+  costoPiscina: integer("costo_piscina").notNull().default(0),
+
+  costoInstalacion: integer("costo_instalacion").notNull().default(0),
+
+  costoEquipoFiltrado: integer("costo_equipo_filtrado").notNull().default(0),
+
+  costoManoObra: integer("costo_mano_obra").notNull().default(0),
+
+  comisionPct: real("comision_pct").notNull().default(0),
+
+  proveedor: text("proveedor"),
+
+  manoObraVeredaAplica: integer("mano_obra_vereda_aplica")
+    .notNull()
+    .default(1),
+
+  // JSON legacy,kept solo para no perder datos. La app ya no lo lee ni lo
+  // escribe; la migracion lo vuelca en las columnas de arriba.
 
   costos: text("costos"),
 
@@ -167,6 +191,50 @@ export const cierres = sqliteTable("cierres", {
   fechaCierre: text("fecha_cierre").notNull(),
 
   observaciones: text("observaciones"),
+
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+})
+
+export const periodos = sqliteTable(
+  "periodos",
+  {
+    id: text("id").primaryKey(),
+
+    mes: integer("mes").notNull(),
+
+    anio: integer("anio").notNull(),
+
+    estado: text("estado").notNull().default("abierto"),
+
+    snapshot: text("snapshot"),
+
+    observaciones: text("observaciones"),
+
+    fechaCierre: text("fecha_cierre"),
+
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+
+    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+  },
+  (t) => [uniqueIndex("periodos_mes_anio_uq").on(t.mes, t.anio)],
+);
+
+/**
+ * Un mes cerrado congela una foto de las cifras y bloquea editar los datos
+ * que la componían. El snapshot queda en `periodos.snapshot` como JSON.
+ */
+export const categorias = sqliteTable("categorias", {
+  id: text("id").primaryKey(),
+
+  nombre: text("nombre").notNull().unique(),
+
+  tipo: text("tipo").notNull(),
+
+  activa: integer("activa").notNull().default(1),
+
+  color: text("color").notNull().default("#64748b"),
+
+  orden: integer("orden").notNull().default(0),
 
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 })

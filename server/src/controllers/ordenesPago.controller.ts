@@ -3,6 +3,8 @@ import { Request, Response } from "express"
 import { idUnico } from "../utils/id.js"
 
 import { db } from "../db/index.js"
+
+import { CAT_PAGO_PROVEEDOR } from "./categorias.controller.js"
 import {
   ordenesPago,
   proveedores,
@@ -365,7 +367,7 @@ export function create(req: Request, res: Response) {
             subCaja: linea.subCaja,
             moneda: linea.moneda,
             tipoCambio: linea.tipoCambio,
-            categoria: "Pago proveedor",
+            categoria: CAT_PAGO_PROVEEDOR,
             comprobante: etiqueta,
             observaciones: cheque
               ? `Cheque ${cheque.tipo} ${cheque.banco} N° ${cheque.numero}`
