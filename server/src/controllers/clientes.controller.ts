@@ -8,6 +8,8 @@ import { eq } from "drizzle-orm"
 
 import { conDerivados } from "./ficheros.controller.js"
 
+import { aCentavos, deCentavos } from "../services/money.js"
+
 /**
  * Estados validos de un cliente.
  *
@@ -248,7 +250,9 @@ export function remove(req: Request, res: Response) {
   const cobradas = delCliente.filter(c => (c.montoPagado ?? 0) > 0)
 
   if (!forzar && cobradas.length > 0) {
-    const total = cobradas.reduce((a, c) => a + (c.montoPagado ?? 0), 0)
+    const total = deCentavos(
+      cobradas.reduce((a, c) => a + aCentavos(c.montoPagado), 0),
+    )
 
     res.status(409).json({
       error:

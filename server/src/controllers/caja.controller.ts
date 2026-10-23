@@ -16,7 +16,11 @@ import { assertMesAbierto } from "../services/periodos.service.js"
 
 import { FECHA_REGEX, parseMesAnio } from "../utils/fecha.js"
 
-import { redondearTipoCambio } from "../services/money.js"
+import {
+  aCentavos,
+  deCentavos,
+  redondearTipoCambio,
+} from "../services/money.js"
 
 function getCurrentDateStr(): string {
   const now = new Date()
@@ -224,15 +228,17 @@ export function createMovimiento(req: Request, res: Response) {
    * el chequeo de presencia y se guardaba crudo en una columna INTEGER, y un
    * egreso de -500 se aceptaba y despues se restaba dos veces.
    */
-  const monto = Number(montoRaw)
+  const montoNum = Number(montoRaw)
 
-  if (!Number.isFinite(monto)) {
+  if (!Number.isFinite(montoNum)) {
     res.status(400).json({ error: "El monto debe ser un numero" })
 
     return
   }
 
-  if (monto < 0) {
+  const montoC = aCentavos(montoNum)
+
+  if (montoC < 0) {
     res.status(400).json({
       error: "El monto no puede ser negativo: usá el tipo ingreso o egreso para el signo",
     })
@@ -240,11 +246,13 @@ export function createMovimiento(req: Request, res: Response) {
     return
   }
 
-  if (monto === 0) {
+  if (montoC === 0) {
     res.status(400).json({ error: "El monto debe ser mayor a 0" })
 
     return
   }
+
+  const monto = deCentavos(montoC)
 
   // `subCaja` es el NOMBRE de una caja (columna TEXT sin FK). Sin validarlo,
   // un movimiento contra una caja inexistente entra al listado pero
@@ -430,7 +438,9 @@ export function updateMovimiento(req: Request, res: Response) {
 
       ...(concepto !== undefined && { concepto }),
 
-      ...(monto !== undefined && { monto: Number(monto) }),
+      ...(monto !== undefined && {
+        monto: deCentavos(aCentavos(Number(monto))),
+      }),
 
       ...(tipo !== undefined && { tipo }),
 
@@ -529,7 +539,7 @@ export function getCierresPreview(req: Request, res: Response) {
     return parsed.mes === mes && parsed.anio === anio && m.subCaja === subCaja
   })
 
-  const { total: saldoFinal } = sumarEnARS(mesMovimientos)
+  const { total: saldoFinalC } = sumarEnARS(mesMovimientos)
 
   const lastCierre = db
     .select()
@@ -541,12 +551,12 @@ export function getCierresPreview(req: Request, res: Response) {
       (b.fecha || b.fechaCierre).localeCompare(a.fecha || a.fechaCierre),
     )[0]
 
-  const saldoInicial = lastCierre ? lastCierre.saldoReal : 0
+  const saldoInicialC = lastCierre ? aCentavos(lastCierre.saldoReal) : 0
 
   res.json({
-    saldoInicial,
-    saldoFinal,
-    saldoEsperado: saldoInicial + saldoFinal,
+    saldoInicial: deCentavos(saldoInicialC),
+    saldoFinal: deCentavos(saldoFinalC),
+    saldoEsperado: deCentavos(saldoInicialC + saldoFinalC),
   })
 }
 
@@ -598,6 +608,8 @@ export function realizarCierre(req: Request, res: Response) {
     return
   }
 
+  const saldoRealC = aCentavos(saldoReal)
+
   const errorCaja = validarSubCaja(subCaja)
 
   if (errorCaja) {
@@ -644,7 +656,7 @@ export function realizarCierre(req: Request, res: Response) {
     return parsed.mes === mes && parsed.anio === anio && m.subCaja === subCaja
   })
 
-  const { total: saldoFinal, sinConvertir } = sumarEnARS(mesMovimientos)
+  const { total: saldoFinalC, sinConvertir } = sumarEnARS(mesMovimientos)
 
   if (sinConvertir > 0) {
     console.warn(
@@ -662,11 +674,11 @@ export function realizarCierre(req: Request, res: Response) {
       (b.fecha || b.fechaCierre).localeCompare(a.fecha || a.fechaCierre),
     )[0]
 
-  const saldoInicial = lastCierre ? lastCierre.saldoReal : 0
+  const saldoInicialC = lastCierre ? aCentavos(lastCierre.saldoReal) : 0
 
-  const diff = saldoReal - (saldoInicial + saldoFinal)
+  const diffC = saldoRealC - (saldoInicialC + saldoFinalC)
 
-  if (diff !== 0) {
+  if (diffC !== 0) {
     // El ajuste va con la fecha del periodo que se esta cerrando, no con la de
     // hoy. Con la de hoy, al cerrar un mes pasado la diferencia aparecia en el
     // mes en curso y alteraba un resumen que no le correspondia.
@@ -689,7 +701,9 @@ export function realizarCierre(req: Request, res: Response) {
   // sueltas: si fallaba la segunda, quedaba un movimiento de ajuste sin
   // ningun cierre que lo justificara, y al reintentar se duplicaba el ajuste.
   db.transaction(tx => {
-    if (diff !== 0) {
+    if (diffC !== 0) {
+      const diff = deCentavos(diffC)
+
       tx.insert(movimientos)
         .values({
           id: idUnico("mov_ajuste"),
@@ -698,9 +712,9 @@ export function realizarCierre(req: Request, res: Response) {
 
           concepto: `Ajuste por cierre ${subCaja} - ${mes}/${anio}`,
 
-          monto: Math.abs(diff),
+          monto: deCentavos(Math.abs(diffC)),
 
-          tipo: diff > 0 ? "ingreso" : "egreso",
+          tipo: diffC > 0 ? "ingreso" : "egreso",
 
           subCaja,
 
@@ -726,13 +740,13 @@ export function realizarCierre(req: Request, res: Response) {
 
         subCaja,
 
-        saldoInicial,
+        saldoInicial: deCentavos(saldoInicialC),
 
-        saldoFinal,
+        saldoFinal: deCentavos(saldoFinalC),
 
-        saldoReal,
+        saldoReal: deCentavos(saldoRealC),
 
-        diferencia: diff,
+        diferencia: deCentavos(diffC),
 
         fecha: fecha || getCurrentDateStr(),
 
@@ -745,7 +759,7 @@ export function realizarCierre(req: Request, res: Response) {
       .run()
   })
 
-  res.status(201).json({ ok: true, id, diferencia: diff })
+  res.status(201).json({ ok: true, id, diferencia: deCentavos(diffC) })
 }
 
 export interface ResumenCaja {
@@ -799,15 +813,19 @@ export function calcularResumenCaja(mes: number, anio: number): ResumenCaja {
       (m) => m.subCaja === cajaItem.nombre,
     )
 
-    const ingresos = sumarMontosEnARS(
+    const ingresosC = sumarMontosEnARS(
       scMovimientos.filter((m) => m.tipo === "ingreso"),
     ).total
 
-    const egresos = sumarMontosEnARS(
+    const egresosC = sumarMontosEnARS(
       scMovimientos.filter((m) => m.tipo === "egreso"),
     ).total
 
-    resumen[cajaItem.nombre] = { total: ingresos - egresos, ingresos, egresos }
+    resumen[cajaItem.nombre] = {
+      total: deCentavos(ingresosC - egresosC),
+      ingresos: deCentavos(ingresosC),
+      egresos: deCentavos(egresosC),
+    }
   }
 
   const generalMovimientos = mesMovimientos.filter((m) => {
@@ -816,19 +834,19 @@ export function calcularResumenCaja(mes: number, anio: number): ResumenCaja {
     return caja ? caja.afectaGeneral === 1 : true
   })
 
-  const totalIngresos = sumarMontosEnARS(
+  const totalIngresosC = sumarMontosEnARS(
     generalMovimientos.filter((m) => m.tipo === "ingreso"),
   ).total
 
-  const totalEgresos = sumarMontosEnARS(
+  const totalEgresosC = sumarMontosEnARS(
     generalMovimientos.filter((m) => m.tipo === "egreso"),
   ).total
 
   return {
     subCajas: resumen,
-    totalIngresos,
-    totalEgresos,
-    gananciaNeta: totalIngresos - totalEgresos,
+    totalIngresos: deCentavos(totalIngresosC),
+    totalEgresos: deCentavos(totalEgresosC),
+    gananciaNeta: deCentavos(totalIngresosC - totalEgresosC),
   }
 }
 

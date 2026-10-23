@@ -18,6 +18,11 @@ import { contarPagos } from "./compras.controller.js"
 
 import { FECHA_REGEX } from "../utils/fecha.js"
 
+import {
+  aCentavos,
+  deCentavos,
+  redondearTipoCambio,
+} from "../services/money.js"
 
 export interface DetalleLinea {
   subCaja: string
@@ -116,17 +121,19 @@ function validarDetalles(
     const moneda = String(d?.moneda ?? "")
       .trim()
       .toUpperCase()
-    const monto = Math.round(Number(d?.monto))
+    const montoC = aCentavos(d?.monto)
 
     if (!subCaja)
       return { ok: false, error: `El tramo ${nro} debe indicar una caja` }
     if (!moneda)
       return { ok: false, error: `El tramo ${nro} debe indicar una moneda` }
-    if (!Number.isFinite(monto) || monto <= 0)
+    if (montoC <= 0)
       return {
         ok: false,
         error: `El monto del tramo ${nro} debe ser mayor a 0`,
       }
+
+    const monto = deCentavos(montoC)
 
     const cajaEfector =
       subCaja === "Cheques" || d?.chequeId ? "Cheques" : subCaja
@@ -139,14 +146,14 @@ function validarDetalles(
     if (caja.activa !== 1)
       return { ok: false, error: `La caja "${cajaEfector}" está inactiva` }
 
-    const tipoCambio =
-      d?.tipoCambio === undefined || d?.tipoCambio === null
-        ? null
-        : Math.round(Number(d.tipoCambio))
-    if (
-      tipoCambio !== null &&
-      (!Number.isFinite(tipoCambio) || tipoCambio <= 0)
-    ) {
+    const tipoCambio = redondearTipoCambio(d?.tipoCambio)
+
+    const tipoCambioEnviado =
+      d?.tipoCambio !== undefined &&
+      d?.tipoCambio !== null &&
+      String(d.tipoCambio) !== ""
+
+    if (tipoCambioEnviado && tipoCambio === null) {
       return {
         ok: false,
         error: `El tipo de cambio del tramo ${nro} debe ser mayor a 0`,
@@ -195,7 +202,7 @@ function validarDetalles(
           error: `El tramo ${nro}: el cheque ${cheque.numero} no está disponible (estado: ${cheque.estado})`,
         }
       }
-      if (cheque.importe !== monto) {
+      if (aCentavos(cheque.importe) !== montoC) {
         return {
           ok: false,
           error: `El tramo ${nro}: el monto debe ser igual al importe del cheque (${cheque.importe})`,
@@ -262,24 +269,25 @@ function validarCompras(
         error: "Una de las compras no pertenece a este proveedor",
       }
 
-    const monto = Math.round(Number(raw?.monto))
-    if (!Number.isFinite(monto) || monto <= 0) {
+    const montoC = aCentavos(raw?.monto)
+    if (montoC <= 0) {
       return {
         ok: false,
         error: `El monto a pagar de la compra debe ser mayor a 0`,
       }
     }
 
-    const pagado = contarPagos(compra.id)
-    const saldo = compra.total - pagado
-    if (monto > saldo) {
+    const saldoC =
+      aCentavos(compra.total) - aCentavos(contarPagos(compra.id))
+
+    if (montoC > saldoC) {
       return {
         ok: false,
-        error: `El pago supera el saldo de la compra (saldo disponible: ${saldo})`,
+        error: `El pago supera el saldo de la compra (saldo disponible: ${deCentavos(saldoC)})`,
       }
     }
 
-    value.push({ compraId: compra.id, monto })
+    value.push({ compraId: compra.id, monto: deCentavos(montoC) })
   }
   return { ok: true, value }
 }

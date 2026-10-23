@@ -16,9 +16,11 @@ import { eq, and } from "drizzle-orm"
 
 import { calcularResumenCaja } from "../controllers/caja.controller.js"
 
-import { calcularDerivados, parseMonto } from "./fichero.costs.js"
+import { calcularDerivados, ventaEnCentavos } from "./fichero.costs.js"
 
 import { sumarMontosEnARS } from "./moneda.js"
+
+import { aCentavos, deCentavos } from "./money.js"
 
 import { claveMes, hoy, parseFecha, diasEntre } from "../utils/fecha.js"
 
@@ -100,9 +102,12 @@ export function calcularVencidos(corte: { anio: number; mes: number; dia: number
 
   let cuotasVencidas = 0
 
-  let montoVencido = 0
+  let montoVencidoC = 0
 
-  const porCliente = new Map<string, { nombre: string; cuotas: number; monto: number }>()
+  const porCliente = new Map<
+    string,
+    { nombre: string; cuotas: number; montoC: number }
+  >()
 
   for (const c of db.select().from(cuotas).all()) {
     if (c.nroCuota <= 0) continue
@@ -115,13 +120,14 @@ export function calcularVencidos(corte: { anio: number; mes: number; dia: number
 
     if (diasEntre(hoyF, venc) <= 0) continue
 
-    const pendiente = c.montoPlanificado - c.montoPagado
+    const pendienteC =
+      aCentavos(c.montoPlanificado) - aCentavos(c.montoPagado)
 
-    if (pendiente <= 0) continue
+    if (pendienteC <= 0) continue
 
     cuotasVencidas += 1
 
-    montoVencido += pendiente
+    montoVencidoC += pendienteC
 
     const clienteId = clientePorFichero.get(c.ficheroId)
 
@@ -130,21 +136,26 @@ export function calcularVencidos(corte: { anio: number; mes: number; dia: number
     const actual = porCliente.get(clienteId) ?? {
       nombre: nombresCliente.get(clienteId) ?? "(cliente borrado)",
       cuotas: 0,
-      monto: 0,
+      montoC: 0,
     }
 
     actual.cuotas += 1
 
-    actual.monto += pendiente
+    actual.montoC += pendienteC
 
     porCliente.set(clienteId, actual)
   }
 
   return {
     cuotasVencidas,
-    montoVencido,
+    montoVencido: deCentavos(montoVencidoC),
     porCliente: [...porCliente.entries()]
-      .map(([clienteId, v]) => ({ clienteId, ...v }))
+      .map(([clienteId, v]) => ({
+        clienteId,
+        nombre: v.nombre,
+        cuotas: v.cuotas,
+        monto: deCentavos(v.montoC),
+      }))
       .sort((a, b) => b.monto - a.monto),
   }
 }
@@ -222,17 +233,17 @@ export function calcularSnapshot(mes: number, anio: number): Snapshot {
       return p !== null && claveMes(p) === clave
     })
 
-  let ventasTotal = 0
-  let costoPiscina = 0
-  let costoInstalacion = 0
-  let costoEquipoFiltrado = 0
-  let costoManoObra = 0
-  let comision = 0
+  let ventasTotalC = 0
+  let costoPiscinaC = 0
+  let costoInstalacionC = 0
+  let costoEquipoFiltradoC = 0
+  let costoManoObraC = 0
+  let comisionC = 0
 
   for (const f of ficherosDelMes) {
-    const venta = parseMonto(f.total)
+    const ventaC = ventaEnCentavos(f)
 
-    const d = calcularDerivados(venta, {
+    const d = calcularDerivados(deCentavos(ventaC), {
       costoPiscina: f.costoPiscina,
       costoInstalacion: f.costoInstalacion,
       costoEquipoFiltrado: f.costoEquipoFiltrado,
@@ -240,20 +251,23 @@ export function calcularSnapshot(mes: number, anio: number): Snapshot {
       comisionPct: f.comisionPct,
     })
 
-    ventasTotal += venta
-    costoPiscina += f.costoPiscina
-    costoInstalacion += f.costoInstalacion
-    costoEquipoFiltrado += f.costoEquipoFiltrado
-    costoManoObra += d.costoManoObra
-    comision += d.comisionMonto
+    ventasTotalC += ventaC
+    costoPiscinaC += aCentavos(f.costoPiscina)
+    costoInstalacionC += aCentavos(f.costoInstalacion)
+    costoEquipoFiltradoC += aCentavos(f.costoEquipoFiltrado)
+    costoManoObraC += aCentavos(d.costoManoObra)
+    comisionC += aCentavos(d.comisionMonto)
   }
 
-  const totalCostos =
-    costoPiscina +
-    costoInstalacion +
-    costoEquipoFiltrado +
-    costoManoObra +
-    comision
+  const totalCostosC =
+    costoPiscinaC +
+    costoInstalacionC +
+    costoEquipoFiltradoC +
+    costoManoObraC +
+    comisionC
+
+  const ventasTotal = deCentavos(ventasTotalC)
+  const totalCostos = deCentavos(totalCostosC)
 
   // --- Caja ---
 
@@ -337,22 +351,22 @@ export function calcularSnapshot(mes: number, anio: number): Snapshot {
     deEsteMes(c.fecha, mes, anio),
   )
 
-  const cuentasAPagar = comprasDelMes.reduce((acc, c) => {
+  const cuentasAPagarC = comprasDelMes.reduce((acc, c) => {
     const pagado = pagadoPorCompra.get(c.id) ?? 0
 
     void comprasMap.get(c.id)
 
-    return acc + Math.max(0, c.total - pagado)
+    return acc + Math.max(0, aCentavos(c.total) - aCentavos(pagado))
   }, 0)
 
   // --- Cartera y vencimientos ---
 
-  const carteraCheques = db
+  const carteraChequesC = db
     .select()
     .from(cheques)
     .all()
     .filter((c) => c.tipo === "recibido" && c.estado === "En Cartera")
-    .reduce((acc, c) => acc + c.importe, 0)
+    .reduce((acc, c) => acc + aCentavos(c.importe), 0)
 
   // La foto del corte es contra el ULTIMO DIA del periodo, no contra hoy.
 const ultimoDia = new Date(Date.UTC(anio, mes, 0)).getUTCDate()
@@ -365,19 +379,21 @@ const vencidos = calcularVencidos({ anio, mes, dia: ultimoDia })
     generadoEn: new Date().toISOString(),
     ventas: { total: ventasTotal, cantidad: ficherosDelMes.length },
     costes: {
-      costoPiscina,
-      costoInstalacion,
-      costoEquipoFiltrado,
-      costoManoObra,
-      comision,
+      costoPiscina: deCentavos(costoPiscinaC),
+      costoInstalacion: deCentavos(costoInstalacionC),
+      costoEquipoFiltrado: deCentavos(costoEquipoFiltradoC),
+      costoManoObra: deCentavos(costoManoObraC),
+      comision: deCentavos(comisionC),
       total: totalCostos,
     },
     resultado: {
       bruto: ventasTotal,
-      neto: ventasTotal - totalCostos,
+      neto: deCentavos(ventasTotalC - totalCostosC),
       margenPct:
-        ventasTotal > 0
-          ? Math.round(((ventasTotal - totalCostos) / ventasTotal) * 1000) / 10
+        ventasTotalC > 0
+          ? Math.round(
+              ((ventasTotalC - totalCostosC) / ventasTotalC) * 1000,
+            ) / 10
           : 0,
     },
     caja: {
@@ -389,12 +405,12 @@ const vencidos = calcularVencidos({ anio, mes, dia: ultimoDia })
     egresosPorCategoria: [...porCategoria.entries()]
       .map(([categoria, v]) => ({
         categoria,
-        total: v.total,
+        total: deCentavos(v.total),
         movimientos: v.n,
       }))
       .sort((a, b) => b.total - a.total),
-    cuentasAPagar,
-    carteraCheques,
+    cuentasAPagar: deCentavos(cuentasAPagarC),
+    carteraCheques: deCentavos(carteraChequesC),
     cuotasVencidas: vencidos.cuotasVencidas,
     montoVencido: vencidos.montoVencido,
     avisos,

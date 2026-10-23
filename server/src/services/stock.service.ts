@@ -3,6 +3,8 @@ import { stock, movimientosStock } from "../db/schema.js"
 import { eq, and } from "drizzle-orm"
 import { idUnico } from "../utils/id.js"
 
+import { aCentavos, deCentavos } from "./money.js"
+
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0]
 
 export function hoy(): string {
@@ -31,7 +33,7 @@ export function aplicarStock(
   },
 ) {
   const { depositoId, articuloId, delta, costoUnitario } = params
-  const costo = Math.max(0, Math.round(costoUnitario))
+  const costoC = Math.max(0, aCentavos(costoUnitario))
   const actual = getStock(tx, depositoId, articuloId)
 
   if (!actual) {
@@ -41,7 +43,7 @@ export function aplicarStock(
         depositoId,
         articuloId,
         cantidad: delta,
-        costoPromedio: costo,
+        costoPromedio: deCentavos(costoC),
         createdAt: new Date(),
       })
       .run()
@@ -49,7 +51,7 @@ export function aplicarStock(
   }
 
   const cantidad = actual.cantidad + delta
-  let costoPromedio = actual.costoPromedio
+  let costoPromedioC = aCentavos(actual.costoPromedio)
 
   // TODO(calculos): deberia ser `=== 0`, no `<= 0`. Cuando el deposito sigue
   // en negativo y entra mercaderia, esto descarta el costo promedio real de
@@ -58,16 +60,16 @@ export function aplicarStock(
 
   if (delta > 0) {
     if (actual.cantidad <= 0) {
-      costoPromedio = costo
+      costoPromedioC = costoC
     } else {
-      costoPromedio = Math.round(
-        (actual.cantidad * actual.costoPromedio + delta * costo) / cantidad,
+      costoPromedioC = Math.round(
+        (actual.cantidad * costoPromedioC + delta * costoC) / cantidad,
       )
     }
   }
 
   tx.update(stock)
-    .set({ cantidad, costoPromedio })
+    .set({ cantidad, costoPromedio: deCentavos(costoPromedioC) })
     .where(eq(stock.id, actual.id))
     .run()
 }
@@ -105,7 +107,9 @@ export function crearMovimiento(
       depositoOrigenId: params.depositoOrigenId ?? null,
       depositoDestinoId: params.depositoDestinoId ?? null,
       cantidad: params.cantidad,
-      costoUnitario: Math.max(0, Math.round(params.costoUnitario)),
+      costoUnitario: deCentavos(
+        Math.max(0, aCentavos(params.costoUnitario)),
+      ),
       referenciaTipo: params.referenciaTipo ?? null,
       referenciaId: params.referenciaId ?? null,
       motivo: params.motivo ?? null,

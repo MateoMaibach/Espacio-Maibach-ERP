@@ -6,6 +6,8 @@ import { db } from "../db/index.js"
 import { articulos, stock, movimientosStock, remitoItems, historialCostos } from "../db/schema.js"
 import { eq, sql } from "drizzle-orm"
 
+import { aCentavos, deCentavos } from "../services/money.js"
+
 export function hoy(): string {
   return new Date().toISOString().slice(0, 10)
 }
@@ -87,11 +89,13 @@ export function create(req: Request, res: Response) {
     return
   }
 
-  const costo = Math.round(Number(costoUnitario ?? 0))
-  if (!Number.isFinite(costo) || costo < 0) {
+  const costoNum = Number(costoUnitario ?? 0)
+  if (!Number.isFinite(costoNum) || costoNum < 0) {
     res.status(400).json({ error: "El costo de referencia no es válido" })
     return
   }
+
+  const costo = deCentavos(aCentavos(costoNum))
 
   const id = idUnico("art")
   db.insert(articulos)
@@ -145,20 +149,22 @@ export function update(req: Request, res: Response) {
   let costoNuevo: number | null = null
 
   if (costoUnitario !== undefined) {
-    const c = Math.round(Number(costoUnitario))
+    const c = Number(costoUnitario)
 
     if (!Number.isFinite(c) || c < 0) {
       res.status(400).json({ error: "El costo de referencia no es válido" })
       return
     }
 
-    costoNuevo = c
+    costoNuevo = deCentavos(aCentavos(c))
   }
 
   // Mismo criterio que la recepcion de compras (compras.controller.ts): solo
   // se registra historial si el costo cambio de verdad, y el update del
   // articulo y la fila del historial van juntos en la misma transaccion.
-  const cambioCosto = costoNuevo !== null && costoNuevo !== existing.costoUnitario
+  const cambioCosto =
+    costoNuevo !== null &&
+    aCentavos(costoNuevo) !== aCentavos(existing.costoUnitario)
 
   db.transaction((tx) => {
     tx.update(articulos)
@@ -216,7 +222,10 @@ export function historialCostosByArticulo(req: Request, res: Response) {
 
   const ultimo = serie[serie.length - 1]
 
-  if (existing.costoUnitario > 0 && ultimo?.costo !== existing.costoUnitario) {
+  if (
+    existing.costoUnitario > 0 &&
+    aCentavos(ultimo?.costo) !== aCentavos(existing.costoUnitario)
+  ) {
     serie.push({
       id: `hct_sintetico_${existing.id}`,
       articuloId: existing.id,

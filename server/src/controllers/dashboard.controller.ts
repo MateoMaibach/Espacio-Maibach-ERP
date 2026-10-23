@@ -31,7 +31,9 @@ import {
   ultimosMeses,
 } from "../utils/fecha.js"
 
-import { parseMonto } from "../services/fichero.costs.js"
+import { ventaEnCentavos } from "../services/fichero.costs.js"
+
+import { aCentavos, deCentavos } from "../services/money.js"
 
 /** Un cheque "en juego" todavia no se cobro ni se deposited. */
 const CHEQUES_VIGENTES = new Set(["Pendiente", "En Cartera"])
@@ -59,7 +61,10 @@ export function getDashboard(_req: Request, res: Response) {
 
     const clave = claveMes(p)
 
-    ventasPorMes.set(clave, (ventasPorMes.get(clave) ?? 0) + parseMonto(f.total))
+    ventasPorMes.set(
+      clave,
+      (ventasPorMes.get(clave) ?? 0) + ventaEnCentavos(f),
+    )
   }
 
   const meses = ultimosMeses(6, hoyF)
@@ -71,7 +76,7 @@ export function getDashboard(_req: Request, res: Response) {
       clave,
       mes: mesEnEspanol(m),
       anio: m.anio,
-      total: ventasPorMes.get(clave) ?? 0,
+      total: deCentavos(ventasPorMes.get(clave) ?? 0),
     }
   })
 
@@ -87,18 +92,18 @@ export function getDashboard(_req: Request, res: Response) {
     pagosIniciales.set(f.clienteId, f.pagoInicial || 0)
   }
 
-  let porCobrar = 0
+  let porCobrarC = 0
 
-  let totalFacturado = 0
+  let totalFacturadoC = 0
 
   for (const f of todosFicheros) {
-    const bruto = parseMonto(f.total)
+    const brutoC = ventaEnCentavos(f)
 
-    const pagado = pagosIniciales.get(f.clienteId) ?? 0
+    const pagadoC = aCentavos(pagosIniciales.get(f.clienteId) ?? 0)
 
-    totalFacturado += bruto
+    totalFacturadoC += brutoC
 
-    porCobrar += Math.max(0, bruto - pagado)
+    porCobrarC += Math.max(0, brutoC - pagadoC)
   }
 
   const clientesPorId = new Map(
@@ -115,12 +120,12 @@ export function getDashboard(_req: Request, res: Response) {
 
   const morososPorCliente = new Map<
     string,
-    { cuotas: number; monto: number }
+    { cuotas: number; montoC: number }
   >()
 
   let cuotasVencidas = 0
 
-  let montoVencido = 0
+  let montoVencidoC = 0
 
   for (const c of todasCuotas) {
     // La cuota nroCuota 0 es el pago inicial, no un vencimiento.
@@ -134,23 +139,27 @@ export function getDashboard(_req: Request, res: Response) {
 
     if (diasEntre(hoyF, venc) <= 0) continue
 
-    const pendiente = c.montoPlanificado - c.montoPagado
+    const pendienteC =
+      aCentavos(c.montoPlanificado) - aCentavos(c.montoPagado)
 
-    if (pendiente <= 0) continue
+    if (pendienteC <= 0) continue
 
     cuotasVencidas += 1
 
-    montoVencido += pendiente
+    montoVencidoC += pendienteC
 
     const clienteId = clientePorFichero.get(c.ficheroId)
 
     if (!clienteId) continue
 
-    const actual = morososPorCliente.get(clienteId) ?? { cuotas: 0, monto: 0 }
+    const actual = morososPorCliente.get(clienteId) ?? {
+      cuotas: 0,
+      montoC: 0,
+    }
 
     actual.cuotas += 1
 
-    actual.monto += pendiente
+    actual.montoC += pendienteC
 
     morososPorCliente.set(clienteId, actual)
   }
@@ -159,7 +168,8 @@ export function getDashboard(_req: Request, res: Response) {
     .map(([clienteId, v]) => ({
       clienteId,
       cliente: clientesPorId.get(clienteId)?.nombre ?? "(cliente borrado)",
-      ...v,
+      cuotas: v.cuotas,
+      monto: deCentavos(v.montoC),
     }))
     .sort((a, b) => b.monto - a.monto)
     .slice(0, TOP)
@@ -177,6 +187,8 @@ export function getDashboard(_req: Request, res: Response) {
     saldo: number
   }[] = []
 
+  let cuentasAPagarC = 0
+
   for (const [proveedorId, porMoneda] of Object.entries(saldos.comprado)) {
     const pagadoPorMoneda = saldos.pagado[proveedorId] ?? {}
 
@@ -186,21 +198,26 @@ export function getDashboard(_req: Request, res: Response) {
     ])
 
     for (const moneda of monedas) {
-      const saldo =
-        (porMoneda[moneda] ?? 0) - (pagadoPorMoneda[moneda] ?? 0)
+      const saldoC =
+        aCentavos(porMoneda[moneda]) - aCentavos(pagadoPorMoneda[moneda])
 
-      if (saldo > 0) proveedoresConSaldo.push({ proveedorId, saldo })
+      if (saldoC > 0) {
+        proveedoresConSaldo.push({
+          proveedorId,
+          saldo: deCentavos(saldoC),
+        })
+
+        cuentasAPagarC += saldoC
+      }
     }
   }
-
-  const cuentasAPagar = proveedoresConSaldo.reduce((acc, p) => acc + p.saldo, 0)
 
   // --- Stock ---
 
   const stockRows = db.select().from(stock).all()
 
-  const valorStock = stockRows.reduce(
-    (acc, r) => acc + r.cantidad * r.costoPromedio,
+  const valorStockC = stockRows.reduce(
+    (acc, r) => acc + aCentavos(r.costoPromedio) * r.cantidad,
     0,
   )
 
@@ -248,9 +265,9 @@ export function getDashboard(_req: Request, res: Response) {
     )
     .sort((a, b) => (a.diasParaCobro ?? 0) - (b.diasParaCobro ?? 0))
 
-  const carteraTotal = todosCheques
+  const carteraTotalC = todosCheques
     .filter((c) => c.tipo === "recibido" && c.estado === "En Cartera")
-    .reduce((acc, c) => acc + c.importe, 0)
+    .reduce((acc, c) => acc + aCentavos(c.importe), 0)
 
   // --- Agenda: instalaciones y veredas ---
 
@@ -360,8 +377,8 @@ export function getDashboard(_req: Request, res: Response) {
               ((totalMesActual - totalMesAnterior) / totalMesAnterior) * 1000,
             ) / 10
           : null,
-      totalFacturado,
-      porCobrar,
+      totalFacturado: deCentavos(totalFacturadoC),
+      porCobrar: deCentavos(porCobrarC),
       clientesActivos: db
         .select()
         .from(clientes)
@@ -369,19 +386,21 @@ export function getDashboard(_req: Request, res: Response) {
         .filter((c) => c.estado === "Activo").length,
       totalClientes: clientesPorId.size,
       cuotasVencidas,
-      montoVencido,
+      montoVencido: deCentavos(montoVencidoC),
       cajaIngresos: resumenCaja.totalIngresos,
       cajaEgresos: resumenCaja.totalEgresos,
       gananciaNeta: resumenCaja.gananciaNeta,
       subCajas: resumenCaja.subCajas,
-      cuentasAPagar,
+      cuentasAPagar: deCentavos(cuentasAPagarC),
       proveedoresConSaldo: proveedoresConSaldo.length,
-      valorStock,
+      valorStock: deCentavos(valorStockC),
       itemsStockNegativo,
       articulosActivos,
       depositosActivos,
-      carteraCheques: carteraTotal,
-      comprasMes: comprasDelMes.reduce((acc, c) => acc + c.total, 0),
+      carteraCheques: deCentavos(carteraTotalC),
+      comprasMes: deCentavos(
+        comprasDelMes.reduce((acc, c) => acc + aCentavos(c.total), 0),
+      ),
       comprasPendientes,
     },
     serieVentas,

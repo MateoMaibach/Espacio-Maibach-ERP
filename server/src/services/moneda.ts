@@ -1,11 +1,16 @@
 import { movimientos } from "../db/schema.js"
 
+import { aCentavos } from "./money.js"
+
 type MovimientoLike = typeof movimientos.$inferSelect
 
 /**
- * Convierte un movimiento a pesos. Hasta ahora todos los totales sumaban
- * `monto` crudo, asi que un movimiento de USD por 180.000 contaba como
+ * Convierte un movimiento a CENTAVOS de ARS. Hasta ahora todos los totales
+ * sumaban `monto` crudo, asi que un movimiento de USD por 180.000 contaba como
  * 180.000 pesos y no 180.000 x 1250.
+ *
+ * La suma se hace en centavos para no arrastrar error de coma flotante; el
+ * caller convierte a pesos con `deCentavos` al responder.
  *
  * `convertible: false` marca el caso de moneda distinta de ARS sin tipo de
  * cambio, para que el caller lo reporte en vez de sumar un numero sin
@@ -18,10 +23,12 @@ export function montoEnARS(m: {
 }): { monto: number; convertible: boolean } {
   const moneda = (m.moneda || "ARS").toUpperCase()
 
-  if (moneda === "ARS") return { monto: m.monto, convertible: true }
+  const montoC = aCentavos(m.monto)
+
+  if (moneda === "ARS") return { monto: montoC, convertible: true }
 
   if (m.tipoCambio && m.tipoCambio > 0) {
-    return { monto: Math.round(m.monto * m.tipoCambio), convertible: true }
+    return { monto: Math.round(montoC * m.tipoCambio), convertible: true }
   }
 
   return { monto: 0, convertible: false }

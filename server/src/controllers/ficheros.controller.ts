@@ -8,7 +8,13 @@ import { ficheros, clientes } from "../db/schema.js"
 
 import { eq } from "drizzle-orm"
 
-import { calcularDerivados, leerInsumos, parseMonto } from "../services/fichero.costs.js"
+import {
+  calcularDerivados,
+  leerInsumos,
+  ventaEnPesos,
+} from "../services/fichero.costs.js"
+
+import { aCentavos } from "../services/money.js"
 
 import { assertMesAbierto } from "../services/periodos.service.js"
 
@@ -30,7 +36,7 @@ export function conDerivados<T extends typeof ficheros.$inferSelect>(
 } {
   return {
     ...fila,
-    ...calcularDerivados(parseMonto(fila.total), {
+    ...calcularDerivados(ventaEnPesos(fila), {
       costoPiscina: fila.costoPiscina,
       costoInstalacion: fila.costoInstalacion,
       costoEquipoFiltrado: fila.costoEquipoFiltrado,
@@ -134,7 +140,10 @@ try {
           items: typeof items === "string" ? items : JSON.stringify(items),
         }),
 
-        ...(total !== undefined && { total }),
+        ...(total !== undefined && {
+          total,
+          totalCentavos: aCentavos(total),
+        }),
 
         ...insumos,
 
@@ -168,6 +177,8 @@ try {
         items: typeof items === "string" ? items : JSON.stringify(items || []),
 
         total: total || "$0",
+
+        totalCentavos: aCentavos(total || 0),
 
         ...insumos,
 

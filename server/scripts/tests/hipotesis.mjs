@@ -992,6 +992,218 @@ test(
   { sev: "ALTA", ref: "caja.controller.ts:443-448", nota: "diff = NaN se inserta en una columna INTEGER" },
 )
 
+test(
+  "E7",
+  "un movimiento de caja conserva los centavos al crear y editar",
+  async ctx => {
+    const { mes, anio } = mesActual()
+
+    const id = await mkMovimiento({
+      fecha: isoMes(mes, anio, 5),
+      monto: 1234.56,
+      subCaja: "Efectivo",
+    })
+
+    const creado = await must(
+      await GET(`/api/caja/movimientos/${id}`),
+      "GET movimiento",
+    )
+
+    ctx.eq(
+      creado.monto,
+      1234.56,
+      `el movimiento se guardo como ${creado.monto} en vez de 1234.56`,
+    )
+
+    await must(
+      await PUT(`/api/caja/movimientos/${id}`, { monto: 987.65 }),
+      "PUT movimiento",
+    )
+
+    const editado = await must(
+      await GET(`/api/caja/movimientos/${id}`),
+      "GET movimiento editado",
+    )
+
+    ctx.eq(
+      editado.monto,
+      987.65,
+      `la edicion guardo ${editado.monto} en vez de 987.65`,
+    )
+
+    await drop(`/api/caja/movimientos/${id}`)
+  },
+  { sev: "CRITICA", ref: "db/schema.ts:centavos", nota: "la columna guarda centavos y el API devuelve pesos" },
+)
+
+test(
+  "E8",
+  "cobrar una cuota con centavos deja el saldo exacto",
+  async ctx => {
+    const { clienteId, cuotas } = await mkClienteConCuotas({
+      total: "$100,50",
+      cantCuotas: 1,
+    })
+
+    const cuota = cuotas.find(c => c.nroCuota === 1)
+
+    ctx.ok(cuota, "el plan genero la cuota 1")
+
+    if (!cuota) return
+
+    ctx.eq(
+      cuota.montoPlanificado,
+      100.5,
+      `la cuota quedo en ${cuota.montoPlanificado} en vez de 100.50`,
+    )
+
+    const r = await POST(
+      `/api/clientes/${clienteId}/fichero/cuotas/${cuota.id}/cobrar`,
+      { monto: 100.5 },
+    )
+
+    ctx.eq(r.status, 200, `cobrar 100.50 deberia dar 200, dio ${r.status}`)
+
+    const cliente = await must(
+      await GET(`/api/clientes/${clienteId}`),
+      "GET cliente",
+    )
+
+    const cobrada = (cliente.cuotas ?? []).find(c => c.id === cuota.id)
+
+    ctx.eq(
+      cobrada?.montoPagado,
+      100.5,
+      `la cuota quedo pagada por ${cobrada?.montoPagado} en vez de 100.50`,
+    )
+    ctx.eq(cobrada?.estado, "Pagada", "la cuota deberia quedar Pagada")
+
+    await drop(`/api/clientes/${clienteId}?forzar=1`)
+  },
+  { sev: "ALTA", ref: "cuotas.controller.ts:registrarCobro", nota: "centavos exactos en cuotas y estado" },
+)
+
+test(
+  "E9",
+  "el tipo de cambio con decimales se conserva y el total de compra no pierde centavos",
+  async ctx => {
+    const proveedorId = await mkProveedor()
+
+    const compra = await mkCompra(
+      proveedorId,
+      [{ detalle: "Item", cantidad: 1, precioUnitario: 100.55 }],
+      { moneda: "USD", tipoCambio: 1234.5678 },
+    )
+
+    const leida = await must(
+      await GET(`/api/compras/${compra.id}`),
+      "GET compra",
+    )
+
+    ctx.eq(
+      leida.total,
+      100.55,
+      `el total quedo en ${leida.total} en vez de 100.55`,
+    )
+    ctx.eq(
+      leida.tipoCambio,
+      1234.5678,
+      `el tipo de cambio quedo en ${leida.tipoCambio} en vez de 1234.5678`,
+    )
+
+    await drop(`/api/compras/${compra.id}`)
+    await drop(`/api/proveedores/${proveedorId}`)
+  },
+  { sev: "ALTA", ref: "compras.controller.ts:calcularTotal", nota: "total en centavos y tasa REAL sin truncar" },
+)
+
+test(
+  "E10",
+  "pagar una compra con centavos deja el saldo del proveedor en cero",
+  async ctx => {
+    const proveedorId = await mkProveedor()
+    const { mes, anio } = mesActual()
+
+    const compra = await mkCompra(
+      proveedorId,
+      [{ detalle: "Item", cantidad: 1, precioUnitario: 100.55 }],
+      { fecha: isoMes(mes, anio, 10) },
+    )
+
+    const op = await POST(`/api/proveedores/${proveedorId}/ordenes-pago`, {
+      fecha: isoMes(mes, anio, 15),
+      concepto: `Pago centavos ${uid()}`,
+      detalles: [{ subCaja: "Bancos", moneda: "ARS", monto: 100.55 }],
+      comprasPagadas: [{ compraId: compra.id, monto: 100.55 }],
+    })
+
+    ctx.eq(op.status, 201, `la orden deberia crearse, dio ${op.status}: ${op.text}`)
+
+    if (op.status !== 201) return
+
+    const orden = await must(
+      await GET(`/api/ordenes-pago/${op.body.id}`),
+      "GET orden",
+    )
+
+    ctx.eq(
+      orden.detalles?.[0]?.monto,
+      100.55,
+      `el detalle quedo en ${orden.detalles?.[0]?.monto} en vez de 100.55`,
+    )
+
+    const proveedor = await must(
+      await GET(`/api/proveedores/${proveedorId}`),
+      "GET proveedor",
+    )
+
+    ctx.eq(
+      proveedor.saldos?.ARS?.saldo,
+      0,
+      `el saldo quedo en ${proveedor.saldos?.ARS?.saldo} en vez de 0`,
+    )
+
+    await must(await POST(`/api/ordenes-pago/${op.body.id}/anular`), "anular orden")
+    await drop(`/api/compras/${compra.id}`)
+    await drop(`/api/proveedores/${proveedorId}`)
+  },
+  { sev: "ALTA", ref: "ordenesPago.controller.ts:validarCompras", nota: "saldo de compra en centavos" },
+)
+
+test(
+  "E11",
+  "el costo promedio ponderado conserva los centavos",
+  async ctx => {
+    const depositoId = await mkDeposito()
+    const articuloId = await mkArticulo({ costoUnitario: 0 })
+
+    await must(
+      await POST("/api/stock/ingresos-iniciales", {
+        depositoId,
+        lineas: [{ articuloId, cantidad: 3, costoUnitario: 10.33 }],
+      }),
+      "ingreso 1",
+    )
+
+    await must(
+      await POST("/api/stock/ingresos-iniciales", {
+        depositoId,
+        lineas: [{ articuloId, cantidad: 7, costoUnitario: 20.77 }],
+      }),
+      "ingreso 2",
+    )
+
+    const fila = await stockDe(depositoId, articuloId)
+
+    ctx.eq(
+      fila.costoPromedio,
+      17.64,
+      `el promedio quedo en ${fila.costoPromedio} en vez de 17.64`,
+    )
+  },
+  { sev: "ALTA", ref: "stock.service.ts:65", nota: "promedio ponderado calculado en centavos" },
+)
+
 /* ================================================================== *
  * F. Validacion ausente
  * ================================================================== */

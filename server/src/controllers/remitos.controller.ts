@@ -22,6 +22,8 @@ import { hoyISO, FECHA_REGEX } from "../utils/fecha.js"
 
 import { registrarDesvio } from "../services/periodos.service.js"
 
+import { aCentavos, deCentavos } from "../services/money.js"
+
 export const TIPOS_REMITO = ["salida", "transferencia"]
 
 export interface LineaRemito {
@@ -204,17 +206,19 @@ export function create(req: Request, res: Response) {
         .json({ error: `Línea ${i + 1}: la cantidad debe ser mayor a cero` })
       return
     }
-    const costoUnitario =
+    const costoNum =
       linea.costoUnitario === undefined || linea.costoUnitario === null
         ? articulo.costoUnitario
-        : Math.max(0, Math.round(Number(linea.costoUnitario)))
+        : Number(linea.costoUnitario)
 
-    if (!Number.isFinite(costoUnitario)) {
+    if (!Number.isFinite(costoNum)) {
       res
         .status(400)
         .json({ error: `Línea ${i + 1}: el costo unitario es inválido` })
       return
     }
+
+    const costoUnitario = deCentavos(Math.max(0, aCentavos(costoNum)))
 
     normalizadas.push({
       articuloId: articulo.id,
@@ -250,7 +254,12 @@ export function create(req: Request, res: Response) {
         destino: destino ? String(destino).trim() : null,
         fecha: fechaFinal,
         estado: "Emitido",
-        valorTotal: normalizadas.reduce((s, l) => s + l.cantidad * l.costoUnitario, 0),
+        valorTotal: deCentavos(
+          normalizadas.reduce(
+            (s, l) => s + Math.round(aCentavos(l.costoUnitario) * l.cantidad),
+            0,
+          ),
+        ),
         observaciones: observaciones ? String(observaciones).trim() : null,
         movimientoIds: "[]",
         createdAt: new Date(),
@@ -267,7 +276,9 @@ export function create(req: Request, res: Response) {
           articuloId: linea.articuloId,
           cantidad: linea.cantidad,
           costoUnitario: linea.costoUnitario,
-          subtotal: linea.cantidad * linea.costoUnitario,
+          subtotal: deCentavos(
+            Math.round(aCentavos(linea.costoUnitario) * linea.cantidad),
+          ),
         })
         .run()
 

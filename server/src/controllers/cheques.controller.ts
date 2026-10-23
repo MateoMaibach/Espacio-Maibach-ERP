@@ -8,6 +8,8 @@ import { cheques, clientes, proveedores, ordenesPago } from "../db/schema.js"
 
 import { eq, desc } from "drizzle-orm"
 
+import { aCentavos, deCentavos } from "../services/money.js"
+
 const ESTADOS_POR_TIPO: Record<string, string[]> = {
   emitido: ["Pendiente", "Pagado", "Rechazado"],
 
@@ -238,7 +240,7 @@ export function create(req: Request, res: Response) {
 
       fechaEntrega: tipo === "recibido" ? fechaEntrega || null : null,
 
-      importe: Math.round(importeNum),
+      importe: deCentavos(aCentavos(importeNum)),
 
       estado: estadoFinal,
 
@@ -413,7 +415,9 @@ export function update(req: Request, res: Response) {
 
       ...(fechaEntrega !== undefined && { fechaEntrega: fechaEntrega || null }),
 
-      ...(importe !== undefined && { importe: Math.round(Number(importe)) }),
+      ...(importe !== undefined && {
+        importe: deCentavos(aCentavos(Number(importe))),
+      }),
 
       ...(estado !== undefined && { estado }),
 

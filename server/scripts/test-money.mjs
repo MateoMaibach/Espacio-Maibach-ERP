@@ -1,11 +1,13 @@
 /**
- * Tests unitarios del modulo de dinero.
+ * Tests unitarios de los modulos de dinero.
  *
- * Se corren con tsx porque importan un archivo .ts del server.
+ * Se corren con tsx porque importan archivos .ts del server.
  * Van aparte de la suite HTTP porque no necesitan base ni servidor.
  */
 
 import { aCentavos, deCentavos, formatearCentavos, redondearTipoCambio } from "../src/services/money.ts"
+
+import { calcularDerivados, parseMonto } from "../src/services/fichero.costs.ts"
 
 const RED = "\x1b[31m"
 const VERDE = "\x1b[32m"
@@ -28,7 +30,7 @@ function eq(actual, esperado, msg) {
   }
 }
 
-console.log(`\n${NEGRITA}Tests de money.ts${RESET}\n`)
+console.log(`\n${NEGRITA}Tests de dinero${RESET}\n`)
 
 /* --- aCentavos: formatos que produce la app --- */
 eq(aCentavos("$1.950.000"), 195000000, '"$1.950.000" -> 195.000.000 centavos')
@@ -75,10 +77,28 @@ eq(redondearTipoCambio(0), null, "tipo de cambio 0 -> null")
 eq(redondearTipoCambio(-5), null, "tipo de cambio negativo -> null")
 eq(redondearTipoCambio(null), null, "tipo de cambio null -> null")
 
+/* --- fichero.costs: parseMonto legacy y derivados en centavos --- */
+eq(parseMonto("$1.950.000,50"), 1950000.5, 'costs: parseMonto("$1.950.000,50")')
+eq(parseMonto(100.5), 100.5, "costs: parseMonto de un numero conserva decimales")
+eq(parseMonto("no-es-un-monto"), 0, "costs: parseMonto invalido -> 0")
+
+const derivados = calcularDerivados(100.5, {
+  costoPiscina: 10.25,
+  costoInstalacion: 5.1,
+  costoEquipoFiltrado: 2.05,
+  costoManoObra: 1,
+  comisionPct: 10,
+})
+
+eq(derivados.comisionMonto, 10.05, "costs: comision 10% de 100,50 = 10,05")
+eq(derivados.totalCostos, 28.45, "costs: total de costos exacto")
+eq(derivados.margenNeto, 72.05, "costs: margen neto exacto")
+eq(derivados.margenPct, 71.7, "costs: margen porcentual")
+
 const total2 = total
 
 console.log(
-  `\n${NEGRITA}money.ts${RESET}  ${fallos ? RED : VERDE}${total2 - fallos} ok${RESET}  ${fallos ? RED : GRIS}${fallos} fallos${RESET}\n`,
+  `\n${NEGRITA}money + costs${RESET}  ${fallos ? RED : VERDE}${total2 - fallos} ok${RESET}  ${fallos ? RED : GRIS}${fallos} fallos${RESET}\n`,
 )
 
 process.exit(fallos ? 1 : 0)

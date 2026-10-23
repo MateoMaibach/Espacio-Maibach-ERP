@@ -18,7 +18,9 @@ import { assertMesAbierto, registrarDesvio } from "../services/periodos.service.
 
 import { FECHA_REGEX, hoyISO, parseFecha } from "../utils/fecha.js"
 
-import { parseMonto } from "../services/fichero.costs.js"
+import { ventaEnCentavos } from "../services/fichero.costs.js"
+
+import { aCentavos, deCentavos } from "../services/money.js"
 
 /** Categoria de ingresos donde cae el cobro de cuotas. */
 const CATEGORIA_COBRO_CUOTA = "Cobro cuota"
@@ -96,11 +98,15 @@ export function registrarPagoInicial(req: Request, res: Response) {
 
   const { monto, metodo, comprobante, observaciones } = req.body
 
-  if (!monto || monto <= 0) {
+  const montoC = aCentavos(monto)
+
+  if (montoC <= 0) {
     res.status(400).json({ error: "Monto obligatorio mayor a 0" })
 
     return
   }
+
+  const montoFinal = deCentavos(montoC)
 
   const existing = db
     .select()
@@ -111,9 +117,9 @@ export function registrarPagoInicial(req: Request, res: Response) {
   if (existing) {
     db.update(cuotas)
       .set({
-        montoPlanificado: monto,
+        montoPlanificado: montoFinal,
 
-        montoPagado: monto,
+        montoPagado: montoFinal,
 
         estado: "Pagada",
 
@@ -138,9 +144,9 @@ export function registrarPagoInicial(req: Request, res: Response) {
 
         fechaVencimiento: getCurrentDateStr(),
 
-        montoPlanificado: monto,
+        montoPlanificado: montoFinal,
 
-        montoPagado: monto,
+        montoPagado: montoFinal,
 
         estado: "Pagada",
 
@@ -160,7 +166,7 @@ export function registrarPagoInicial(req: Request, res: Response) {
   }
 
   db.update(ficheros)
-    .set({ pagoInicial: monto })
+    .set({ pagoInicial: montoFinal })
     .where(eq(ficheros.id, fichero.id))
     .run()
 
@@ -190,16 +196,16 @@ export function generarPlan(req: Request, res: Response) {
 
   const { cantCuotas, fechaPrimerVto } = req.body
 
-  const total = parseMonto(fichero.total)
+  const totalC = ventaEnCentavos(fichero)
 
-  const pagoInicial = fichero.pagoInicial || 0
+  const pagoInicialC = aCentavos(fichero.pagoInicial)
 
-  const saldo = total - pagoInicial
+  const saldoC = totalC - pagoInicialC
 
   const nCrudo = cantCuotas ?? fichero.cantCuotas ?? 1
 
   // Sin esto, cantCuotas: -5 creaba 0 cuotas pero guardaba cantCuotas = -5 en
-  // el fichero y respondia cuoticasGeneradas: -5. Y un 3.5 genia 4 cuotas
+  // el fichero y respondia cuotasGeneradas: -5. Y un 3.5 generaba 4 cuotas
   // (for i < 3.5) sin aplicar nunca el remanente.
   const n = Math.trunc(Number(nCrudo))
 
@@ -219,7 +225,7 @@ export function generarPlan(req: Request, res: Response) {
     return
   }
 
-  if (saldo <= 0) {
+  if (saldoC <= 0) {
     res
       .status(400)
       .json({
@@ -284,25 +290,24 @@ const startYear = primera?.anio ?? now.getFullYear()
   )
 
   if (cuotasCobradas.length > 0) {
-    const cobrado = cuotasCobradas.reduce((a, c) => a + (c.montoPagado ?? 0), 0)
+    const cobradoC = cuotasCobradas.reduce(
+      (a, c) => a + aCentavos(c.montoPagado),
+      0,
+    )
 
     res.status(409).json({
       error:
         `No se puede regenerar el plan: ya hay ${cuotasCobradas.length} cuota(s) cobradas ` +
-        `($${cobrado.toLocaleString("es-AR")}). Editá el importe de las cuotas existentes, ` +
+        `($${deCentavos(cobradoC).toLocaleString("es-AR")}). Editá el importe de las cuotas existentes, ` +
         `o corregí los cobros antes de volver a generar el plan.`,
     })
 
     return
   }
 
-  const montoPorCuota = Math.floor(saldo / n)
+  const montoPorCuotaC = Math.floor(saldoC / n)
 
-  const montoUltima = saldo - montoPorCuota * (n - 1)
-
-  // TODO(calculos): este for ignora el dia de fechaPrimerVto (siempre 1) y
-  // con n fraccionario nunca aplica montoUltima, dejando las cuotas sin
-  // cuadrar contra el saldo. Ver el TODO de generarPlan mas arriba.
+  const montoUltimaC = saldoC - montoPorCuotaC * (n - 1)
 
   // Borrar e insertar tiene que ser una sola operacion: si fallara en el
   // medio, el fichero se quedaria sin ninguna cuota.
@@ -330,7 +335,10 @@ const startYear = primera?.anio ?? now.getFullYear()
 
           fechaVencimiento: fechaVenc,
 
-          montoPlanificado: i === n - 1 ? montoUltima : montoPorCuota,
+          montoPlanificado:
+            i === n - 1
+              ? deCentavos(montoUltimaC)
+              : deCentavos(montoPorCuotaC),
 
           montoPagado: 0,
 
@@ -363,7 +371,9 @@ export function agregarCargo(req: Request, res: Response) {
 
   const { fechaVencimiento, monto, descripcion } = req.body
 
-  if (!monto || monto <= 0) {
+  const montoC = aCentavos(monto)
+
+  if (montoC <= 0) {
     res.status(400).json({ error: "Monto obligatorio mayor a 0" })
 
     return
@@ -387,7 +397,7 @@ export function agregarCargo(req: Request, res: Response) {
 
       fechaVencimiento: fechaVencimiento || getCurrentDateStr(),
 
-      montoPlanificado: monto,
+      montoPlanificado: deCentavos(montoC),
 
       montoPagado: 0,
 
@@ -442,7 +452,10 @@ export function editarCuota(req: Request, res: Response) {
       return
     }
 
-    if (n < 0) {
+    const nC = aCentavos(n)
+    const pagadoC = aCentavos(cuota.montoPagado)
+
+    if (nC < 0) {
       res.status(400).json({ error: "El monto planificado no puede ser negativo" })
 
       return
@@ -450,11 +463,11 @@ export function editarCuota(req: Request, res: Response) {
 
     // Bajar el planificado por debajo de lo ya cobrado dejaba la cuota en un
     // estado imposible: pagado 40.000 sobre un planificado de 1.
-    if (n < (cuota.montoPagado ?? 0)) {
+    if (nC < pagadoC) {
       res.status(400).json({
         error:
           `El monto planificado no puede ser menor a lo ya cobrado ` +
-          `(${cuota.montoPagado.toLocaleString("es-AR")})`,
+          `(${deCentavos(pagadoC).toLocaleString("es-AR")})`,
       })
 
       return
@@ -464,7 +477,9 @@ export function editarCuota(req: Request, res: Response) {
   const cambios = {
     ...(fechaVencimiento !== undefined && { fechaVencimiento }),
 
-    ...(nuevoMonto !== undefined && { montoPlanificado: Number(nuevoMonto) }),
+    ...(nuevoMonto !== undefined && {
+      montoPlanificado: deCentavos(aCentavos(Number(nuevoMonto))),
+    }),
 
     ...(descripcion !== undefined && { descripcion }),
 
@@ -513,15 +528,18 @@ export function registrarCobro(req: Request, res: Response) {
 
   const { monto: montoRaw, metodo, comprobante, observaciones, fecha, subCaja } = req.body
 
-  // Sin Number() ni isFinite, mandar "abc" guardaba la cadena "0abc" en una
-  // columna INTEGER y el saldo quedaba corrupto para siempre.
-  const monto = Number(montoRaw)
+  // Sin validacion, mandar "abc" guardaba la cadena "0abc" en una columna
+  // INTEGER y el saldo quedaba corrupto para siempre. `aCentavos` devuelve 0
+  // para cualquier entrada ilegible, asi que el chequeo de abajo la corta.
+  const montoC = aCentavos(montoRaw)
 
-  if (!Number.isFinite(monto) || monto <= 0) {
+  if (montoC <= 0) {
     res.status(400).json({ error: "Monto obligatorio mayor a 0" })
 
     return
   }
+
+  const monto = deCentavos(montoC)
 
   if (cuota.estado === "Pagada") {
     res.status(409).json({
@@ -534,15 +552,17 @@ export function registrarCobro(req: Request, res: Response) {
     return
   }
 
-  const saldo = cuota.montoPlanificado - (cuota.montoPagado ?? 0)
+  const pagadoC = aCentavos(cuota.montoPagado)
 
-  if (monto > saldo) {
+  const saldoC = aCentavos(cuota.montoPlanificado) - pagadoC
+
+  if (montoC > saldoC) {
     res.status(400).json({
       error:
         `El monto supera el saldo de la cuota. ` +
         `Planificado: ${cuota.montoPlanificado.toLocaleString("es-AR")}, ` +
-        `pagado: ${(cuota.montoPagado ?? 0).toLocaleString("es-AR")}, ` +
-        `saldo: ${saldo.toLocaleString("es-AR")}`,
+        `pagado: ${deCentavos(pagadoC).toLocaleString("es-AR")}, ` +
+        `saldo: ${deCentavos(saldoC).toLocaleString("es-AR")}`,
     })
 
     return
@@ -595,10 +615,14 @@ export function registrarCobro(req: Request, res: Response) {
     detalle: `${monto.toLocaleString("es-AR")} a la cuota ${cuota.nroCuota}`,
   })
 
-  const nuevoMontoPagado = (cuota.montoPagado ?? 0) + monto
+  const nuevoMontoPagadoC = pagadoC + montoC
 
   const nuevoEstado =
-    nuevoMontoPagado >= cuota.montoPlanificado ? "Pagada" : "Parcial"
+    nuevoMontoPagadoC >= aCentavos(cuota.montoPlanificado)
+      ? "Pagada"
+      : "Parcial"
+
+  const nuevoMontoPagado = deCentavos(nuevoMontoPagadoC)
 
   const fichero = db
     .select()

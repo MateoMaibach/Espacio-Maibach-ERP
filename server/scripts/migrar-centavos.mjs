@@ -2,16 +2,21 @@
  * Migracion a centavos.
  *
  * Multiplica por 100 todas las columnas que guardan PESOS y las pasa a
- * CENTAVOS enteros. El API sigue hablando pesos: la conversion ocurre en
- * `src/services/money.ts`, en el borde.
+ * CENTAVOS enteros. El API sigue hablando pesos: la conversion ocurre en el
+ * tipo de columna `centavos` de `src/db/schema.ts`, en el borde con SQLite.
  *
  * Solo toca columnas de dinero. NO toca `created_at`/`updated_at` (epoch
  * millis), ni flags (`activa`, `afecta_general`, `aplica_pago_proveedor`,
  * `mano_obra_vereda_aplica`), ni contadores (`orden`, `cantidad`, `nro_cuota`,
  * `cant_cuotas`, `numero`, `mes`, `anio`).
  *
- * `tipo_cambio` es una TASA, no un monto: no se multiplica, solo se deja de
- * truncar (la columna ya es REAL).
+ * Los blobs JSON (`compras.items`, `ordenes_pago.detalles`,
+ * `ordenes_pago.compras_pagadas`, `ficheros.costos` y `periodos.snapshot`)
+ * quedan en PESOS: la app los lee y escribe en pesos, igual que el API. Solo
+ * se convierten las columnas SQL.
+ *
+ * `tipo_cambio` es una TASA, no un monto: no se multiplica. En el esquema
+ * nuevo la columna es REAL para no perder decimales.
  *
  * Uso:
  *   node scripts/migrar-centavos.mjs --dry-run
@@ -236,140 +241,6 @@ function marcarMigracion() {
 }
 
 /* ------------------------------------------------------------------ *
- * 3. Blobs JSON con dinero dentro
- * ------------------------------------------------------------------ */
-
-/** Multiplica por 100 los campos indicados de cada elemento de un JSON. */
-function escalarJsonColumna(tabla, columna, claves) {
-  const filas = db.prepare(`SELECT id, ${columna} AS payload FROM ${tabla}`).all()
-  let cambios = 0
-
-  const upd = DRY_RUN
-    ? null
-    : db.prepare(`UPDATE ${tabla} SET ${columna} = ? WHERE id = ?`)
-
-  for (const fila of filas) {
-    if (!fila.payload) continue
-
-    let arr
-
-    try {
-      arr = JSON.parse(fila.payload)
-    } catch {
-      continue
-    }
-
-    if (!Array.isArray(arr)) continue
-
-    let tocada = false
-
-    for (const el of arr) {
-      for (const clave of claves) {
-        if (typeof el?.[clave] === "number") {
-          el[clave] = Math.round(el[clave] * 100)
-          tocada = true
-        }
-      }
-    }
-
-    if (tocada) {
-      cambios++
-      if (upd) upd.run(JSON.stringify(arr), fila.id)
-    }
-  }
-
-  if (cambios) console.log(`  ${tabla}.${columna}[${claves.join(",")}]: ${cambios} filas`)
-
-  return cambios
-}
-
-/* ------------------------------------------------------------------ *
- * 4. Snapshots de periodos
- * ------------------------------------------------------------------ */
-
-/**
- * El snapshot congelado tambien tiene dinero dentro de sus objetos anidados.
- *
- * NO se escala "todo numero que aparezca": el snapshot mezcla montos con
- * porcentajes (`margenPct`) y con contadores (`cantidad`, `movimientos`,
- * `cuotasVencidas`, `mes`, `anio`). Multiplicar esos por 100毁 el snapshot.
- * Por eso es una lista blanca explicita de claves, espejo de la interface
- * `Snapshot` de src/services/api.ts.
- */
-const SNAPSHOT_MONTO = new Set([
-  // ventas
-  "total",
-  // costes
-  "costoPiscina",
-  "costoInstalacion",
-  "costoEquipoFiltrado",
-  "costoManoObra",
-  "comision",
-  // resultado (margenPct NO es dinero: es un porcentaje)
-  "bruto",
-  "neto",
-  // caja y porSubCaja
-  "ingresos",
-  "egresos",
-  "gananciaNeta",
-  // egresosPorCategoria
-  "movimientos",
-  // totales sueltos
-  "cuentasAPagar",
-  "carteraCheques",
-  "montoVencido",
-])
-
-function migrarSnapshots() {
-  const filas = db.prepare(`SELECT id, snapshot FROM periodos WHERE snapshot IS NOT NULL`).all()
-  let cambios = 0
-
-  const upd = DRY_RUN ? null : db.prepare(`UPDATE periodos SET snapshot = ? WHERE id = ?`)
-
-  const escalar = obj => {
-    let tocada = false
-
-    for (const clave of Object.keys(obj)) {
-      const v = obj[clave]
-
-      if (Array.isArray(v)) {
-        for (const el of v) {
-          if (el && typeof el === "object") tocada = escalar(el) || tocada
-        }
-      } else if (v && typeof v === "object") {
-        tocada = escalar(v) || tocada
-      } else if (typeof v === "number" && SNAPSHOT_MONTO.has(clave)) {
-        obj[clave] = Math.round(v * 100)
-        tocada = true
-      }
-    }
-
-    return tocada
-  }
-
-  for (const fila of filas) {
-    let snap
-
-    try {
-      snap = JSON.parse(fila.snapshot)
-    } catch {
-      continue
-    }
-
-    if (!snap || typeof snap !== "object") continue
-
-    if (escalar(snap)) {
-      cambios++
-      if (upd) upd.run(JSON.stringify(snap), fila.id)
-    }
-  }
-
-  if (cambios) console.log(`  periodos.snapshot: ${cambios} snapshots`)
-
-  return cambios
-}
-
-/* ------------------------------------------------------------------ *
  * Corrida
  * ------------------------------------------------------------------ */
 
@@ -426,21 +297,6 @@ const correr = () => {
     totalCambios += 1
     console.log(`  ${t}.${c}: x100`)
   }
-
-  totalCambios += escalarJsonColumna("compras", "items", ["precioUnitario"])
-  totalCambios += escalarJsonColumna("ordenes_pago", "detalles", ["monto"])
-  totalCambios += escalarJsonColumna("ordenes_pago", "compras_pagadas", ["monto"])
-  totalCambios += migrarSnapshots()
-  totalCambios += escalarJsonColumna("ficheros", "costos", [
-    "costoPiscina",
-    "costoInstalacion",
-    "costoEquipoFiltrado",
-    "costoManoObra",
-    "venta",
-    "comisionMonto",
-    "totalCostos",
-    "margenNeto",
-  ])
 }
 
 if (DRY_RUN) {

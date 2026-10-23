@@ -1,13 +1,13 @@
 /**
  * Unidad del dinero.
  *
- * Regla unica de todo el servidor: DENTRO de la base y de los calculos la
- * unidad es CENTAVOS (entero). El API habla PESOS (puede ser decimal) y
- * convierte en el borde con `aCentavos` / `deCentavos`.
+ * Regla unica de todo el servidor: el API y los calculos en JS hablan PESOS
+ * (pueden tener decimales); SQLite guarda CENTAVOS enteros. La conversion vive
+ * en el tipo `centavos` de `db/schema.ts`, en el borde con la base.
  *
  * Motivo: las columnas monetarias son INTEGER y cada `Math.round` a mitad de
  * camino perdia centavos. Con centavos enteros la aritmetica es exacta y el
- * redondeo solo aparece una vez, al mostrar.
+ * redondeo solo aparece una vez, al escribir.
  *
  * `parseMonto` (fichero.costs.ts) queda viejo a proposito: lee las columnas
  * TEXT legacy. No usar para valores nuevos.
@@ -59,8 +59,8 @@ export function deCentavos(centavos: number): number {
 }
 
 /**
- * Igual que `deCentavos` pero para las respuestas que el front ya espera
- * redondeadas: los montos de caja son pesos enteros en la UI.
+ * Igual que `deCentavos` pero redondeado a pesos enteros. Solo para casos
+ * donde la UI muestra importes sin centavos.
  */
 export function deCentavosEntera(centavos: number): number {
   return Math.round(deCentavos(centavos))

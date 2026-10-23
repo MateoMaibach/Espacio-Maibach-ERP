@@ -21,6 +21,7 @@ import { FECHA_REGEX } from "../utils/fecha.js"
 
 import { registrarDesvio } from "../services/periodos.service.js"
 
+import { aCentavos, deCentavos } from "../services/money.js"
 
 function existeDeposito(id: string) {
   return db.select().from(depositos).where(eq(depositos.id, id)).get()
@@ -279,14 +280,15 @@ export function createIngresoInicial(req: Request, res: Response) {
       return
     }
     const articulo = existeArticulo(linea.articuloId)
-    const costoUnitario =
+    const costoNum =
       linea.costoUnitario === undefined || linea.costoUnitario === null
         ? (articulo?.costoUnitario ?? 0)
-        : Math.round(Number(linea.costoUnitario))
-    if (!Number.isFinite(costoUnitario) || costoUnitario < 0) {
+        : Number(linea.costoUnitario)
+    if (!Number.isFinite(costoNum) || costoNum < 0) {
       res.status(400).json({ error: `Línea ${i + 1}: costo inválido` })
       return
     }
+    const costoUnitario = deCentavos(aCentavos(costoNum))
     normalizadas.push({ articuloId: linea.articuloId, cantidad, costoUnitario })
   }
 
@@ -318,7 +320,10 @@ export function createIngresoInicial(req: Request, res: Response) {
         .where(eq(articulos.id, linea.articuloId))
         .get()
 
-      if (articulo && articulo.costoUnitario !== linea.costoUnitario) {
+      if (
+        articulo &&
+        aCentavos(articulo.costoUnitario) !== aCentavos(linea.costoUnitario)
+      ) {
         tx.update(articulos)
           .set({ costoUnitario: linea.costoUnitario })
           .where(eq(articulos.id, linea.articuloId))

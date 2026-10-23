@@ -1,4 +1,5 @@
 import {
+  customType,
   sqliteTable,
   text,
   integer,
@@ -6,13 +7,26 @@ import {
   uniqueIndex,
 } from "drizzle-orm/sqlite-core"
 
-// TODO(esquema): los montos y los tipos de cambio estan en columnas INTEGER
-// (compras.tipo_cambio, compras.total, articulos.costo_unitario,
-// stock.costo_promedio, movimientos_stock.cantidad/costo_unitario,
-// remito_items.*, historial_costos.costo) pero el front manda step="0.01".
-// Los controladores hacen Math.round de forma bastante consistente, asi que
-// no rompe, pero se pierden los centavos. Migrar esas columnas a real exige
-// revisar los calculos de saldo y valorizacion, por eso queda como tarea aparte.
+import { aCentavos, deCentavos } from "../services/money.js"
+
+/**
+ * Columna monetaria.
+ *
+ * En SQLite se guarda como entero de CENTAVOS; en JS se lee y escribe en
+ * PESOS. Asi los calculos de la app siguen en pesos, el API no cambia y el
+ * redondeo ocurre una sola vez, al escribir.
+ */
+const centavos = customType<{ data: number; driverData: number }>({
+  dataType() {
+    return "integer"
+  },
+  toDriver(value) {
+    return aCentavos(value)
+  },
+  fromDriver(value) {
+    return deCentavos(Number(value))
+  },
+})
 
 export const clientes = sqliteTable("clientes", {
   id: text("id").primaryKey(),
@@ -61,17 +75,22 @@ export const ficheros = sqliteTable("ficheros", {
 
   total: text("total").notNull().default("$0"),
 
+  // Espejo en centavos del total con formato. La columna TEXT se conserva por
+  // compatibilidad; el codigo nuevo usa este entero para no parsear el string.
+
+  totalCentavos: integer("total_centavos"),
+
   // Insumos del negocio. Los derivados (comisionMonto, totalCostos,
   // margenNeto, margenPct) NO se guardan: se calculan siempre desde estos
   // numeros y el total del fichero, para que no puedan quedar desfasados.
 
-  costoPiscina: integer("costo_piscina").notNull().default(0),
+  costoPiscina: centavos("costo_piscina").notNull().default(0),
 
-  costoInstalacion: integer("costo_instalacion").notNull().default(0),
+  costoInstalacion: centavos("costo_instalacion").notNull().default(0),
 
-  costoEquipoFiltrado: integer("costo_equipo_filtrado").notNull().default(0),
+  costoEquipoFiltrado: centavos("costo_equipo_filtrado").notNull().default(0),
 
-  costoManoObra: integer("costo_mano_obra").notNull().default(0),
+  costoManoObra: centavos("costo_mano_obra").notNull().default(0),
 
   comisionPct: real("comision_pct").notNull().default(0),
 
@@ -90,7 +109,7 @@ export const ficheros = sqliteTable("ficheros", {
 
   cantCuotas: integer("cant_cuotas").notNull().default(0),
 
-  pagoInicial: integer("pago_inicial").notNull().default(0),
+  pagoInicial: centavos("pago_inicial").notNull().default(0),
 
   estado: text("estado").notNull().default("pendiente"),
 
@@ -108,9 +127,9 @@ export const cuotas = sqliteTable("cuotas", {
 
   fechaVencimiento: text("fecha_vencimiento").notNull(),
 
-  montoPlanificado: integer("monto_planificado").notNull(),
+  montoPlanificado: centavos("monto_planificado").notNull(),
 
-  montoPagado: integer("monto_pagado").notNull().default(0),
+  montoPagado: centavos("monto_pagado").notNull().default(0),
 
   estado: text("estado").notNull().default("Pendiente"),
 
@@ -150,7 +169,7 @@ export const movimientos = sqliteTable("movimientos", {
 
   concepto: text("concepto").notNull(),
 
-  monto: integer("monto").notNull(),
+  monto: centavos("monto").notNull(),
 
   tipo: text("tipo").notNull(),
 
@@ -158,7 +177,7 @@ export const movimientos = sqliteTable("movimientos", {
 
   moneda: text("moneda").notNull().default("ARS"),
 
-  tipoCambio: integer("tipo_cambio"),
+  tipoCambio: real("tipo_cambio"),
 
   categoria: text("categoria"),
 
@@ -178,13 +197,13 @@ export const cierres = sqliteTable("cierres", {
 
   subCaja: text("sub_caja").notNull(),
 
-  saldoInicial: integer("saldo_inicial").notNull(),
+  saldoInicial: centavos("saldo_inicial").notNull(),
 
-  saldoFinal: integer("saldo_final").notNull(),
+  saldoFinal: centavos("saldo_final").notNull(),
 
-  saldoReal: integer("saldo_real").notNull(),
+  saldoReal: centavos("saldo_real").notNull(),
 
-  diferencia: integer("diferencia").notNull().default(0),
+  diferencia: centavos("diferencia").notNull().default(0),
 
   fecha: text("fecha").notNull(),
 
@@ -367,9 +386,9 @@ export const compras = sqliteTable("compras", {
 
   moneda: text("moneda").notNull().default("ARS"),
 
-  tipoCambio: integer("tipo_cambio"),
+  tipoCambio: real("tipo_cambio"),
 
-  total: integer("total").notNull().default(0),
+  total: centavos("total").notNull().default(0),
 
   items: text("items").notNull().default("[]"),
 
@@ -437,7 +456,7 @@ export const cheques = sqliteTable("cheques", {
 
   fechaEntrega: text("fecha_entrega"),
 
-  importe: integer("importe").notNull(),
+  importe: centavos("importe").notNull(),
 
   estado: text("estado").notNull(),
 
@@ -473,7 +492,7 @@ export const articulos = sqliteTable("articulos", {
 
   unidad: text("unidad").notNull().default("un"),
 
-  costoUnitario: integer("costo_unitario").notNull().default(0),
+  costoUnitario: centavos("costo_unitario").notNull().default(0),
 
   activo: integer("activo").notNull().default(1),
 
@@ -495,7 +514,7 @@ export const stock = sqliteTable(
 
     cantidad: integer("cantidad").notNull().default(0),
 
-    costoPromedio: integer("costo_promedio").notNull().default(0),
+    costoPromedio: centavos("costo_promedio").notNull().default(0),
 
     createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
   },
@@ -524,7 +543,7 @@ export const movimientosStock = sqliteTable("movimientos_stock", {
 
   cantidad: integer("cantidad").notNull(),
 
-  costoUnitario: integer("costo_unitario").notNull().default(0),
+  costoUnitario: centavos("costo_unitario").notNull().default(0),
 
   referenciaTipo: text("referencia_tipo"),
 
@@ -557,7 +576,7 @@ export const remitos = sqliteTable("remitos", {
 
   estado: text("estado").notNull().default("Emitido"),
 
-  valorTotal: integer("valor_total").notNull().default(0),
+  valorTotal: centavos("valor_total").notNull().default(0),
 
   observaciones: text("observaciones"),
 
@@ -579,9 +598,9 @@ export const remitoItems = sqliteTable("remito_items", {
 
   cantidad: integer("cantidad").notNull(),
 
-  costoUnitario: integer("costo_unitario").notNull().default(0),
+  costoUnitario: centavos("costo_unitario").notNull().default(0),
 
-  subtotal: integer("subtotal").notNull().default(0),
+  subtotal: centavos("subtotal").notNull().default(0),
 })
 
 export const historialCostos = sqliteTable("historial_costos", {
@@ -591,7 +610,7 @@ export const historialCostos = sqliteTable("historial_costos", {
     .notNull()
     .references(() => articulos.id, { onDelete: "cascade" }),
 
-  costo: integer("costo").notNull(),
+  costo: centavos("costo").notNull(),
 
   fecha: text("fecha").notNull(),
 

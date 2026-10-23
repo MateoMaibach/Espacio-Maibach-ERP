@@ -35,6 +35,33 @@ export const db = drizzle(sqlite, { schema })
 
 export { sqlite }
 
+// Una base que ya existia antes de este codigo tiene los montos en pesos. Si
+// no esta marcada como migrada, arrancar la app guardaria centavos en columnas
+// con pesos viejos y romperia todas las cuentas en silencio. Mejor no arrancar.
+
+const baseExistente = Boolean(
+  sqlite
+    .prepare(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'clientes'",
+    )
+    .get(),
+)
+
+sqlite.exec(
+  "CREATE TABLE IF NOT EXISTS _migraciones (nombre TEXT PRIMARY KEY, aplicada_en TEXT NOT NULL)",
+)
+
+const migracionCentavos = sqlite
+  .prepare("SELECT nombre FROM _migraciones WHERE nombre = 'centavos_v1'")
+  .get()
+
+if (baseExistente && !migracionCentavos) {
+  throw new Error(
+    `La base ${dbPath} todavia tiene los montos en pesos. ` +
+      "Detene el server y ejecuta `node scripts/migrar-centavos.mjs` en server/.",
+  )
+}
+
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS clientes (
     id TEXT PRIMARY KEY,
@@ -61,6 +88,7 @@ sqlite.exec(`
     comision TEXT,
     items TEXT NOT NULL DEFAULT '[]',
     total TEXT NOT NULL DEFAULT '$0',
+    total_centavos INTEGER,
     costo_piscina INTEGER NOT NULL DEFAULT 0,
     costo_instalacion INTEGER NOT NULL DEFAULT 0,
     costo_equipo_filtrado INTEGER NOT NULL DEFAULT 0,
@@ -110,7 +138,7 @@ sqlite.exec(`
     tipo TEXT NOT NULL,
     sub_caja TEXT NOT NULL,
     moneda TEXT NOT NULL DEFAULT 'ARS',
-    tipo_cambio INTEGER,
+    tipo_cambio REAL,
     categoria TEXT,
     comprobante TEXT,
     observaciones TEXT,
@@ -260,7 +288,7 @@ sqlite.exec(`
     fecha TEXT NOT NULL,
     descripcion TEXT,
     moneda TEXT NOT NULL DEFAULT 'ARS',
-    tipo_cambio INTEGER,
+    tipo_cambio REAL,
     total INTEGER NOT NULL DEFAULT 0,
     items TEXT NOT NULL DEFAULT '[]',
     estado TEXT NOT NULL DEFAULT 'Pendiente',
@@ -405,6 +433,10 @@ function agregarColumnaSiFalta(
 // instalaciones previas al fix del bootstrap, asi que se aggregan aca.
 
 agregarColumnaSiFalta("ficheros", "pago_inicial", "INTEGER NOT NULL DEFAULT 0")
+
+// Espejo en centavos del total formateado. Lo agrega el script de migracion
+// sobre bases viejas; en una base nueva nace con la tabla.
+agregarColumnaSiFalta("ficheros", "total_centavos", "INTEGER")
 
 // Costes normalizados: antes vivian dentro del JSON `costos` como strings.
 // Si las columnas no existen las agrega; el volcado de datos a estas columnas
@@ -559,4 +591,16 @@ try {
   sqlite.exec(
     "ALTER TABLE compras ADD COLUMN recepciones TEXT NOT NULL DEFAULT '[]'",
   )
+}
+
+// Una base nueva ya nace con el esquema en centavos; las viejas solo llegan
+// aca despues de correr scripts/migrar-centavos.mjs (si no, el guard de arriba
+// corta el arranque).
+
+if (!migracionCentavos) {
+  sqlite
+    .prepare(
+      "INSERT OR IGNORE INTO _migraciones (nombre, aplicada_en) VALUES (?, ?)",
+    )
+    .run("centavos_v1", new Date().toISOString())
 }

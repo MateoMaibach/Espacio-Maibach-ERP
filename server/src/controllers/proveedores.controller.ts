@@ -6,6 +6,8 @@ import { db } from "../db/index.js"
 import { proveedores, compras, ordenesPago } from "../db/schema.js"
 import { eq, sql } from "drizzle-orm"
 
+import { aCentavos, deCentavos } from "../services/money.js"
+
 export const ESTADOS_PROVEEDOR = [
   "Activo",
   "Inactivo",
@@ -50,8 +52,9 @@ export function calcularSaldos() {
     .all()) {
     compraMoneda.set(c.id, { proveedorId: c.proveedorId, moneda: c.moneda })
     comprado[c.proveedorId] ??= {}
-    comprado[c.proveedorId][c.moneda] =
-      (comprado[c.proveedorId][c.moneda] ?? 0) + c.total
+    comprado[c.proveedorId][c.moneda] = deCentavos(
+      aCentavos(comprado[c.proveedorId][c.moneda]) + aCentavos(c.total),
+    )
     if (!ultimaCompra[c.proveedorId] || c.fecha > ultimaCompra[c.proveedorId]) {
       ultimaCompra[c.proveedorId] = c.fecha
     }
@@ -72,8 +75,10 @@ export function calcularSaldos() {
       const meta = compraMoneda.get(link.compraId)
       if (!meta) continue
       pagado[meta.proveedorId] ??= {}
-      pagado[meta.proveedorId][meta.moneda] =
-        (pagado[meta.proveedorId][meta.moneda] ?? 0) + Number(link.monto || 0)
+      pagado[meta.proveedorId][meta.moneda] = deCentavos(
+        aCentavos(pagado[meta.proveedorId][meta.moneda]) +
+          aCentavos(link.monto),
+      )
     }
   }
 
@@ -92,7 +97,11 @@ function armarSaldos(
   for (const moneda of monedas) {
     const comprado = saldos.comprado[proveedorId]?.[moneda] ?? 0
     const pagado = saldos.pagado[proveedorId]?.[moneda] ?? 0
-    resultado[moneda] = { comprado, pagado, saldo: comprado - pagado }
+    resultado[moneda] = {
+      comprado,
+      pagado,
+      saldo: deCentavos(aCentavos(comprado) - aCentavos(pagado)),
+    }
   }
   return resultado
 }

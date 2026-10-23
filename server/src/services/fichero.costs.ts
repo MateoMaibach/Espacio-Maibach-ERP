@@ -19,8 +19,8 @@ import { aCentavos, deCentavos } from "./money.js"
  * (`fichero.costs.ts`, `dashboard.controller.ts`, `cuotas.controller.ts`).
  * Las tres tienen el mismo defecto; ahora hay una sola y delega en `money.ts`.
  *
- * Nota: devuelve un numero con decimales. Las columnas siguen siendo INTEGER,
- * asi que al guardar se redondea (ver `schema.ts`, TODO deesquema).
+ * Nota: devuelve un numero con decimales. Solo se usa para leer las columnas
+ * TEXT legacy; las columnas monetarias nuevas guardan centavos enteros.
  */
 export function parseMonto(value: unknown): number {
   if (typeof value === "number") {
@@ -30,6 +30,28 @@ export function parseMonto(value: unknown): number {
   if (typeof value !== "string") return 0
 
   return deCentavos(aCentavos(value))
+}
+
+/**
+ * Total del fichero en CENTAVOS.
+ *
+ * Usa la columna espejo `total_centavos`, que es la fuente de verdad nueva.
+ * El fallback a `total` (TEXT) cubre filas viejas que todavia no pasaron por
+ * el script de migracion.
+ */
+export function ventaEnCentavos(f: {
+  total: string
+  totalCentavos?: number | null
+}): number {
+  return f.totalCentavos ?? aCentavos(parseMonto(f.total))
+}
+
+/** Total del fichero en PESOS, para las respuestas del API. */
+export function ventaEnPesos(f: {
+  total: string
+  totalCentavos?: number | null
+}): number {
+  return deCentavos(ventaEnCentavos(f))
 }
 
 export interface Insumos {
@@ -49,24 +71,26 @@ export interface Derivados extends Insumos {
 }
 
 export function calcularDerivados(venta: number, insumos: Insumos): Derivados {
-  const comisionMonto = Math.round((venta * (insumos.comisionPct || 0)) / 100)
+  const ventaC = aCentavos(venta)
 
-  const totalCostos =
-    insumos.costoPiscina +
-    insumos.costoInstalacion +
-    insumos.costoEquipoFiltrado +
-    insumos.costoManoObra +
-    comisionMonto
+  const comisionC = Math.round((ventaC * (insumos.comisionPct || 0)) / 100)
 
-  const margenNeto = venta - totalCostos
+  const totalCostosC =
+    aCentavos(insumos.costoPiscina) +
+    aCentavos(insumos.costoInstalacion) +
+    aCentavos(insumos.costoEquipoFiltrado) +
+    aCentavos(insumos.costoManoObra) +
+    comisionC
+
+  const margenNetoC = ventaC - totalCostosC
 
   return {
     ...insumos,
-    venta,
-    comisionMonto,
-    totalCostos,
-    margenNeto,
-    margenPct: venta > 0 ? Math.round((margenNeto / venta) * 1000) / 10 : 0,
+    venta: deCentavos(ventaC),
+    comisionMonto: deCentavos(comisionC),
+    totalCostos: deCentavos(totalCostosC),
+    margenNeto: deCentavos(margenNetoC),
+    margenPct: ventaC > 0 ? Math.round((margenNetoC / ventaC) * 1000) / 10 : 0,
   }
 }
 
@@ -96,7 +120,7 @@ export function leerInsumos(
   for (const [clave, campo] of campos) {
     if (body[campo] === undefined || body[campo] === null) continue
 
-    const n = Math.round(parseMonto(body[campo]))
+    const n = parseMonto(body[campo])
 
     out[clave] = Number.isFinite(n) && n > MONTO_MINIMO ? n : 0
   }
