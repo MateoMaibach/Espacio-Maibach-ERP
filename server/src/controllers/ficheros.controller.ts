@@ -12,6 +12,8 @@ import { calcularDerivados, leerInsumos, parseMonto } from "../services/fichero.
 
 import { assertMesAbierto } from "../services/periodos.service.js"
 
+import { hoyISO } from "../utils/fecha.js"
+
 /**
  * Agrega a un fichero los derivados (comisionMonto, totalCostos, margenNeto,
  * margenPct) sin guardarlos, para que el front no los recalcule ni el total
@@ -108,13 +110,16 @@ export function upsert(req: Request, res: Response) {
     }
   }
 
-  try {
-    assertMesAbierto(fecha ? String(fecha) : "")
-  } catch (e) {
-    res.status(409).json({ error: (e as Error).message })
+  // El alta usaba `fecha ? fecha : ""`, y con "" el guard de mes cerrado no
+// podia hacer nada: un fichero nuevo sin fecha caia en cualquier mes y quedaba
+// invisible para el cierre. Sin fecha se usa la de hoy.
+try {
+  assertMesAbierto(fecha ? String(fecha) : hoyISO())
+} catch (e) {
+  res.status(409).json({ error: (e as Error).message })
 
-    return
-  }
+  return
+}
 
   if (existing) {
     db.update(ficheros)

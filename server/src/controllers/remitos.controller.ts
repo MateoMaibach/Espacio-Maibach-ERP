@@ -9,17 +9,20 @@ import {
   depositos,
   articulos,
   movimientosStock,
+  stock,
 } from "../db/schema.js"
 import { eq, desc, sql, and } from "drizzle-orm"
 import {
   aplicarStock,
   crearMovimiento,
-  eliminarMovimiento,
   hoy,
 } from "../services/stock.service.js"
 
+import { hoyISO, FECHA_REGEX } from "../utils/fecha.js"
+
+import { registrarDesvio } from "../services/periodos.service.js"
+
 export const TIPOS_REMITO = ["salida", "transferencia"]
-const FECHA_REGEX = /^\d{4}-\d{2}-\d{2}$/
 
 export interface LineaRemito {
   articuloId: string
@@ -33,15 +36,6 @@ function existeDeposito(id: string) {
 
 function existeArticulo(id: string) {
   return db.select().from(articulos).where(eq(articulos.id, id)).get()
-}
-
-function parseJson<T>(raw: unknown, fallback: T): T {
-  if (typeof raw !== "string" || !raw) return fallback
-  try {
-    return JSON.parse(raw) as T
-  } catch {
-    return fallback
-  }
 }
 
 export function getAll(req: Request, res: Response) {
@@ -231,6 +225,13 @@ export function create(req: Request, res: Response) {
 
   const fechaFinal = fecha || hoy()
 
+  registrarDesvio({
+    fecha: fechaFinal,
+    tabla: "remitos",
+    operacion: `emitir_${tipo}`,
+    detalle: destino || depositoDestinoId,
+  })
+
   const result = db.transaction((tx) => {
     const maxRow = tx
       .select({ max: sql<number>`coalesce(max(numero), 0)` })
@@ -348,16 +349,37 @@ export function anular(req: Request, res: Response) {
     .where(eq(remitoItems.remitoId, existing.id))
     .all()
 
-  const movimientos = parseJson<string[]>(existing.movimientoIds, [])
-
   db.transaction((tx) => {
+    /**
+     * La anulacion no borra: deja un movimiento compensativo con el mismo
+     * `referenciaId`.
+     *
+     * Antes se hacia `eliminarMovimiento` (DELETE fisico del kardex) mientras los
+     * `remito_items` seguian ahi. Quedaba un remito con items pero sin ningun
+     * movimiento: el kardex y los items dejaban de ser 1:1 y un remito anulado
+     * no dejaba ningun rastro de que la mercaderia habia salido.
+     */
     for (const item of items) {
       if (existing.depositoOrigenId) {
+        // Reponer con el costo promedio del ORIGEN, no con el costo congelado
+        // del remito: usar el del remito reescribia la valuacion historica del
+        // deposito (un ingreso con delta > 0 recalcula el promedio).
+        const actual = tx
+          .select()
+          .from(stock)
+          .where(
+            and(
+              eq(stock.depositoId, existing.depositoOrigenId),
+              eq(stock.articuloId, item.articuloId),
+            ),
+          )
+          .get()
+
         aplicarStock(tx, {
           depositoId: existing.depositoOrigenId,
           articuloId: item.articuloId,
           delta: item.cantidad,
-          costoUnitario: item.costoUnitario,
+          costoUnitario: actual?.costoPromedio ?? item.costoUnitario,
         })
       }
 
@@ -369,10 +391,19 @@ export function anular(req: Request, res: Response) {
           costoUnitario: item.costoUnitario,
         })
       }
-    }
 
-    for (const movimientoId of movimientos) {
-      eliminarMovimiento(tx, movimientoId)
+      crearMovimiento(tx, {
+        fecha: hoyISO(),
+        tipo: "anulacion",
+        articuloId: item.articuloId,
+        depositoOrigenId: existing.depositoOrigenId ?? null,
+        depositoDestinoId: existing.depositoDestinoId ?? null,
+        cantidad: item.cantidad,
+        costoUnitario: item.costoUnitario,
+        referenciaTipo: "remito_anulacion",
+        referenciaId: existing.id,
+        motivo: `Anulación del remito ${existing.numero}`,
+      })
     }
 
     tx.update(remitos)
