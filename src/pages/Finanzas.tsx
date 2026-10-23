@@ -12,7 +12,7 @@ import {
   type Periodo,
 } from "@/services/api";
 
-import { formatMonto, formatMontoCorto } from "@/utils/format";
+import { formatMonto, formatMontoCorto } from "@/utils/money";
 
 const MESES = [
   "Enero",

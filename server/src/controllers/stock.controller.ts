@@ -17,7 +17,11 @@ import {
   hoy,
 } from "../services/stock.service.js"
 
-const FECHA_REGEX = /^\d{4}-\d{2}-\d{2}$/
+import { FECHA_REGEX } from "../utils/fecha.js"
+
+import { registrarDesvio } from "../services/periodos.service.js"
+
+import { aCentavos, deCentavos } from "../services/money.js"
 
 function existeDeposito(id: string) {
   return db.select().from(depositos).where(eq(depositos.id, id)).get()
@@ -127,7 +131,55 @@ export function getMovimientos(req: Request, res: Response) {
     a.fecha === b.fecha ? b.id.localeCompare(a.id) : b.fecha.localeCompare(a.fecha),
   )
 
+  // El saldo acumulado es por (articulo, deposito). Con una sola bolsa para
+  // todo el articulo, una transferencia se cruzaba sin descontarse del origen
+  // y el saldo final no coincidia con la existencia real.
+  const depositoFiltro = depositoId ?? null
+
   const saldos = new Map<string, number>()
+
+  const claveSaldo = (m: { articuloId: string; depositoOrigenId: string | null; depositoDestinoId: string | null }) =>
+    depositoFiltro
+      ? `${m.articuloId}|${depositoFiltro}`
+      : m.depositoDestinoId
+        ? `${m.articuloId}|${m.depositoDestinoId}`
+        : m.depositoOrigenId
+          ? `${m.articuloId}|${m.depositoOrigenId}`
+          : `${m.articuloId}|`
+
+  /**
+   * Cuanto suma o resta este movimiento al saldo de UN deposito.
+   *   ingreso     -> +cantidad en el destino
+   *   egreso      -> -cantidad en el origen
+   *   transferencia -> -cantidad en el origen, +cantidad en el destino
+   *   ajuste      -> +/- segun el signo de la cantidad
+   *   anulacion   -> compensa la salida (delta contrario)
+   */
+  function deltaEn(m: typeof filtrados[number], deposito: string): number {
+    if (depositoFiltro && depositoFiltro !== deposito) return 0
+
+    switch (m.tipo) {
+      case "ingreso":
+        return m.cantidad
+
+      case "egreso":
+        return -m.cantidad
+
+      case "transferencia":
+        if (m.depositoOrigenId === deposito) return -m.cantidad
+        if (m.depositoDestinoId === deposito) return m.cantidad
+        return 0
+
+      case "anulacion":
+        if (m.depositoOrigenId === deposito) return -m.cantidad
+        if (m.depositoDestinoId === deposito) return m.cantidad
+        return 0
+
+      default:
+        return m.cantidad
+    }
+  }
+
   const conSaldo = Boolean(articuloId)
 
   const result = filtrados.map((m) => {
@@ -135,18 +187,19 @@ export function getMovimientos(req: Request, res: Response) {
     let saldo = null
 
     if (conSaldo) {
-      const previo = saldos.get(m.articuloId) ?? 0
-      const delta =
-        m.tipo === "ingreso"
-          ? m.cantidad
-          : m.tipo === "egreso"
-            ? -m.cantidad
-            : m.tipo === "transferencia"
-              ? 0
-              : m.cantidad
-      const nuevo = previo + delta
-      saldos.set(m.articuloId, nuevo)
-      saldo = nuevo
+      const depositosDeLaLinea = depositoFiltro
+        ? [depositoFiltro]
+        : [m.depositoOrigenId, m.depositoDestinoId].filter(
+            (d): d is string => Boolean(d),
+          )
+
+      for (const d of depositosDeLaLinea) {
+        const clave = `${m.articuloId}|${d}`
+        const previo = saldos.get(clave) ?? 0
+        saldos.set(clave, previo + deltaEn(m, d))
+      }
+
+      saldo = saldos.get(claveSaldo(m)) ?? 0
     }
 
     return {
@@ -159,7 +212,10 @@ export function getMovimientos(req: Request, res: Response) {
       depositoDestino: m.depositoDestinoId
         ? (depMap.get(m.depositoDestinoId)?.nombre ?? "—")
         : null,
-      valor: m.cantidad * m.costoUnitario * (m.tipo === "egreso" ? -1 : 1),
+      valor:
+        m.cantidad *
+        m.costoUnitario *
+        (m.tipo === "egreso" || m.tipo === "anulacion" ? -1 : 1),
       saldo,
     }
   })
@@ -197,6 +253,13 @@ export function createIngresoInicial(req: Request, res: Response) {
     return
   }
 
+  registrarDesvio({
+    fecha: fechaFinal,
+    tabla: "stock",
+    operacion: "ingreso_inicial",
+    detalle: `${Array.isArray(lineas) ? lineas.length : 0} artículo(s)`,
+  })
+
   const normalizadas: {
     articuloId: string
     cantidad: number
@@ -217,14 +280,15 @@ export function createIngresoInicial(req: Request, res: Response) {
       return
     }
     const articulo = existeArticulo(linea.articuloId)
-    const costoUnitario =
+    const costoNum =
       linea.costoUnitario === undefined || linea.costoUnitario === null
         ? (articulo?.costoUnitario ?? 0)
-        : Math.round(Number(linea.costoUnitario))
-    if (!Number.isFinite(costoUnitario) || costoUnitario < 0) {
+        : Number(linea.costoUnitario)
+    if (!Number.isFinite(costoNum) || costoNum < 0) {
       res.status(400).json({ error: `Línea ${i + 1}: costo inválido` })
       return
     }
+    const costoUnitario = deCentavos(aCentavos(costoNum))
     normalizadas.push({ articuloId: linea.articuloId, cantidad, costoUnitario })
   }
 
@@ -256,7 +320,10 @@ export function createIngresoInicial(req: Request, res: Response) {
         .where(eq(articulos.id, linea.articuloId))
         .get()
 
-      if (articulo && articulo.costoUnitario !== linea.costoUnitario) {
+      if (
+        articulo &&
+        aCentavos(articulo.costoUnitario) !== aCentavos(linea.costoUnitario)
+      ) {
         tx.update(articulos)
           .set({ costoUnitario: linea.costoUnitario })
           .where(eq(articulos.id, linea.articuloId))
@@ -317,6 +384,13 @@ export function createAjuste(req: Request, res: Response) {
       .json({ error: "La fecha debe tener formato yyyy-mm-dd" })
     return
   }
+
+  registrarDesvio({
+    fecha: fechaFinal,
+    tabla: "stock",
+    operacion: "ajuste",
+    detalle: motivo,
+  })
 
   const normalizadas: { articuloId: string; cantidad: number }[] = []
 

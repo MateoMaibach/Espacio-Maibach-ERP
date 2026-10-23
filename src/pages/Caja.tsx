@@ -5,6 +5,10 @@ import { useNavigate } from "react-router-dom";
 import AppLayout from "@/layouts/AppLayout";
 
 import { IconPlus, IconSearch } from "@/components/Icons";
+import ErrorBanner from "@/components/ErrorBanner";
+
+import { formatFechaLarga, toISODate } from "@/utils/fecha";
+import { formatMonto } from "@/utils/money";
 
 import {
   getMovimientos,
@@ -25,9 +29,6 @@ import {
   deleteBanco,
   getMonedasCaja,
   getCategorias,
-  createCategoria,
-  updateCategoria,
-  deleteCategoria,
   type Categoria,
   type Movimiento,
   type ResumenCaja,
@@ -52,41 +53,6 @@ const MESES = [
 ];
 
 const DONUT_COLORS = ["#0ea5e9", "#f59e0b", "#10b981", "#7c3aed", "#ef4444", "#ec4899"];
-
-function formatCurrency(value: number): string {
-  return `$${value.toLocaleString("es-AR")}`;
-}
-
-const SHORT_MONTHS = [
-  "Ene",
-  "Feb",
-  "Mar",
-  "Abr",
-  "May",
-  "Jun",
-  "Jul",
-  "Ago",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dic",
-];
-
-function formatFecha(iso: string): string {
-  if (!iso) return "";
-
-  const parts = iso.split("-");
-
-  if (parts.length < 3) return iso;
-
-  const [y, mo, d] = [parts[0] || "", parts[1] || "", parts[2] || ""];
-
-  return `${d} ${SHORT_MONTHS[parseInt(mo) - 1] || mo}, ${y}`;
-}
-
-function toISODate(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
 
 function getCurrentMonthYear() {
   const now = new Date();
@@ -241,7 +207,7 @@ function DonutChart({ data }: { data: { label: string; value: number; color: str
             className="font-['Geist:Bold']"
             style={{ fontSize: 16, fontWeight: 700, fill: "#0f172a" }}
           >
-            {formatCurrency(total)}
+            {formatMonto(total)}
           </text>
         </svg>
       </div>
@@ -277,6 +243,10 @@ export default function Caja() {
   const [cierres, setCierres] = useState<Cierre[]>([]);
 
   const [loading, setLoading] = useState(true);
+
+  const [error, setError] = useState<string | null>(null);
+
+  const [errorModal, setErrorModal] = useState<string | null>(null);
 
   const [filtroSubCaja, setFiltroSubCaja] = useState("Todas");
 
@@ -335,57 +305,6 @@ export default function Caja() {
 
   const [showBancosAdmin, setShowBancosAdmin] = useState(false);
 
-  const [showCategoriasAdmin, setShowCategoriasAdmin] = useState(false);
-
-  const [nuevaCategoria, setNuevaCategoria] = useState({
-    nombre: "",
-    tipo: "egreso" as "ingreso" | "egreso",
-  });
-
-  const [categoriaError, setCategoriaError] = useState<string | null>(null);
-
-  async function handleCrearCategoria() {
-    if (!nuevaCategoria.nombre.trim()) return;
-
-    try {
-      await createCategoria(nuevaCategoria);
-
-      setNuevaCategoria({ nombre: "", tipo: nuevaCategoria.tipo });
-
-      setCategoriaError(null);
-
-      await cargarCategorias();
-    } catch (e) {
-      setCategoriaError(
-        e instanceof Error ? e.message : "No se pudo crear la categoría",
-      );
-    }
-  }
-
-  async function handleToggleCategoria(c: Categoria) {
-    try {
-      await updateCategoria(c.id, { activa: c.activa === 1 ? 0 : 1 });
-
-      await cargarCategorias();
-    } catch (e) {
-      setCategoriaError(
-        e instanceof Error ? e.message : "No se pudo actualizar",
-      );
-    }
-  }
-
-  async function handleBorrarCategoria(c: Categoria) {
-    try {
-      await deleteCategoria(c.id);
-
-      await cargarCategorias();
-    } catch (e) {
-      setCategoriaError(
-        e instanceof Error ? e.message : "No se pudo eliminar",
-      );
-    }
-  }
-
   const [showBancoModal, setShowBancoModal] = useState(false);
 
   const [editingBanco, setEditingBanco] = useState<Banco | null>(null);
@@ -402,7 +321,9 @@ export default function Caja() {
 
       return data;
     } catch (err) {
-      console.error(err);
+      setError(
+        err instanceof Error ? err.message : "Error al cargar las cajas",
+      );
 
       return [];
     }
@@ -425,8 +346,12 @@ export default function Caja() {
       setResumen(res);
 
       setCierres(cie);
+
+      setError(null);
     } catch (err) {
-      console.error(err);
+      setError(
+        err instanceof Error ? err.message : "Error al cargar los movimientos",
+      );
     } finally {
       setLoading(false);
     }
@@ -438,7 +363,7 @@ export default function Caja() {
 
       setBancos(data);
     } catch (err) {
-      console.error(err);
+      setError(err instanceof Error ? err.message : "Error al cargar los bancos");
     }
   }, []);
 
@@ -590,6 +515,8 @@ export default function Caja() {
       fecha: toISODate(new Date()),
     });
 
+    setErrorModal(null);
+
     setShowMovimientoModal(true);
   }
 
@@ -618,17 +545,19 @@ export default function Caja() {
       observaciones: m.observaciones || "",
     });
 
+    setErrorModal(null);
+
     setShowMovimientoModal(true);
   }
 
   async function handleGuardarMovimiento() {
     if (!form.concepto.trim()) {
-      alert("El concepto es obligatorio");
+      setErrorModal("El concepto es obligatorio");
       return;
     }
 
     if (!form.monto || Number(form.monto) <= 0) {
-      alert("El monto debe ser mayor a 0");
+      setErrorModal("El monto debe ser mayor a 0");
       return;
     }
 
@@ -665,7 +594,7 @@ export default function Caja() {
 
       cargarDatos();
     } catch (err: any) {
-      alert(err.message || "Error al guardar");
+      setErrorModal(err.message || "Error al guardar");
     }
   }
 
@@ -675,13 +604,16 @@ export default function Caja() {
       setDeleteConfirm(null);
       cargarDatos();
     } catch (err) {
-      console.error(err);
+      setDeleteConfirm(null);
+      setError(
+        err instanceof Error ? err.message : "Error al eliminar el movimiento",
+      );
     }
   }
 
   async function handleCerrarMes() {
     if (!cierreForm.saldoReal || Number(cierreForm.saldoReal) < 0) {
-      alert("Ingresá un saldo real válido");
+      setErrorModal("Ingresá un saldo real válido");
       return;
     }
 
@@ -710,7 +642,7 @@ export default function Caja() {
 
       cargarDatos();
     } catch (err: any) {
-      alert(err.message || "Error al cerrar");
+      setErrorModal(err.message || "Error al cerrar");
     } finally {
       setCierreLoading(false);
     }
@@ -725,6 +657,8 @@ export default function Caja() {
       orden: String(cajas.length + 1),
     });
 
+    setErrorModal(null);
+
     setShowCajaModal(true);
   }
 
@@ -733,12 +667,14 @@ export default function Caja() {
 
     setCajaForm({ nombre: c.nombre, color: c.color, orden: String(c.orden) });
 
+    setErrorModal(null);
+
     setShowCajaModal(true);
   }
 
   async function handleGuardarCaja() {
     if (!cajaForm.nombre.trim()) {
-      alert("El nombre es obligatorio");
+      setErrorModal("El nombre es obligatorio");
       return;
     }
 
@@ -770,7 +706,7 @@ export default function Caja() {
 
       cargarDatos();
     } catch (err: any) {
-      alert(err.message || "Error al guardar caja");
+      setErrorModal(err.message || "Error al guardar caja");
     }
   }
 
@@ -781,7 +717,8 @@ export default function Caja() {
       cargarCajas();
       cargarDatos();
     } catch (err: any) {
-      alert(err.message || "Error al eliminar caja");
+      setDeleteCajaConfirm(null);
+      setError(err.message || "Error al eliminar caja");
     }
   }
 
@@ -789,6 +726,8 @@ export default function Caja() {
     setEditingBanco(null);
 
     setBancoForm({ nombre: "" });
+
+    setErrorModal(null);
 
     setShowBancoModal(true);
   }
@@ -798,12 +737,14 @@ export default function Caja() {
 
     setBancoForm({ nombre: b.nombre });
 
+    setErrorModal(null);
+
     setShowBancoModal(true);
   }
 
   async function handleGuardarBanco() {
     if (!bancoForm.nombre.trim()) {
-      alert("El nombre es obligatorio");
+      setErrorModal("El nombre es obligatorio");
       return;
     }
 
@@ -815,7 +756,7 @@ export default function Caja() {
 
       cargarBancos();
     } catch (err: any) {
-      alert(err.message || "Error al guardar banco");
+      setErrorModal(err.message || "Error al guardar banco");
     }
   }
 
@@ -825,7 +766,8 @@ export default function Caja() {
       setDeleteBancoConfirm(null);
       cargarBancos();
     } catch (err: any) {
-      alert(err.message || "Error al eliminar banco");
+      setDeleteBancoConfirm(null);
+      setError(err.message || "Error al eliminar banco");
     }
   }
 
@@ -870,6 +812,14 @@ export default function Caja() {
   return (
     <AppLayout breadcrumbs={[{ label: "Inicio", onClick: () => navigate("/") }, { label: "Caja" }]}>
       <div className="p-[32px] flex flex-col gap-[24px]">
+        {error && (
+          <ErrorBanner
+            mensaje={error}
+            onReintentar={cargarDatos}
+            onCerrar={() => setError(null)}
+          />
+        )}
+
         {/* Title Row */}
         <div className="flex items-start justify-between">
           <div>
@@ -938,12 +888,8 @@ export default function Caja() {
               Gestionar Bancos
             </button>
             <button
-              onClick={() => setShowCategoriasAdmin(!showCategoriasAdmin)}
-              className={`font-['Geist:Medium',sans-serif] font-medium text-[13px] px-[14px] py-[10px] rounded-[8px] transition-colors border ${
-                showCategoriasAdmin
-                  ? "bg-[#0f172a] text-white border-[#0f172a]"
-                  : "bg-white text-[#475569] border-[#e2e8f0] hover:bg-[#f8fafc]"
-              }`}
+              onClick={() => navigate("/configuracion")}
+              className="font-['Geist:Medium',sans-serif] font-medium text-[13px] px-[14px] py-[10px] rounded-[8px] transition-colors border bg-white text-[#475569] border-[#e2e8f0] hover:bg-[#f8fafc]"
             >
               Gestionar Categorías
             </button>
@@ -1076,137 +1022,6 @@ export default function Caja() {
           </div>
         )}
 
-        {/* Categorías Admin Section */}
-        {showCategoriasAdmin && (
-          <div
-            className="bg-white p-[20px] rounded-[12px]"
-            style={{ border: "1px solid #e2e8f0" }}
-          >
-            <div className="flex items-center justify-between mb-[16px]">
-              <div>
-                <p className="font-['Geist:Bold',sans-serif] font-bold text-[#0f172a] text-[16px]">
-                  Gestionar Categorías
-                </p>
-                <p className="font-['Geist:Regular',sans-serif] text-[#94a3b8] text-[12px] mt-[2px]">
-                  Rubros para clasificar ingresos y egresos. Se usan en el
-                  análisis de gastos de Finanzas.
-                </p>
-              </div>
-            </div>
-
-            {categoriaError && (
-              <div
-                className="rounded-[8px] p-[10px] mb-[12px]"
-                style={{ background: "#fef2f2" }}
-              >
-                <p className="font-['Geist:Regular',sans-serif] text-[#b91c1c] text-[12px]">
-                  {categoriaError}
-                </p>
-              </div>
-            )}
-
-            <div className="flex gap-[10px] mb-[16px]">
-              <input
-                value={nuevaCategoria.nombre}
-                onChange={(e) =>
-                  setNuevaCategoria((p) => ({ ...p, nombre: e.target.value }))
-                }
-                placeholder="Nombre de la categoría"
-                className="flex-1 font-['Geist:Regular',sans-serif] text-[14px] text-[#0f172a] px-[12px] py-[9px] rounded-[8px] outline-none border border-[#e2e8f0]"
-              />
-
-              <select
-                value={nuevaCategoria.tipo}
-                onChange={(e) =>
-                  setNuevaCategoria((p) => ({
-                    ...p,
-                    tipo: e.target.value as "ingreso" | "egreso",
-                  }))
-                }
-                className="font-['Geist:Regular',sans-serif] text-[14px] text-[#0f172a] px-[12px] py-[9px] rounded-[8px] outline-none border border-[#e2e8f0] bg-white cursor-pointer"
-              >
-                <option value="egreso">Egreso</option>
-                <option value="ingreso">Ingreso</option>
-              </select>
-
-              <button
-                onClick={handleCrearCategoria}
-                disabled={!nuevaCategoria.nombre.trim()}
-                className="flex items-center gap-[6px] bg-[#0ea5e9] hover:bg-[#0284c7] transition-colors text-white font-['Geist:SemiBold',sans-serif] font-semibold text-[13px] px-[12px] py-[8px] rounded-[8px] disabled:opacity-40"
-              >
-                <IconPlus /> Agregar
-              </button>
-            </div>
-
-            <div className="grid grid-cols-2 gap-[16px]">
-              {(["ingreso", "egreso"] as const).map((tipo) => (
-                <div key={tipo} className="flex flex-col gap-[6px]">
-                  <p className="font-['Geist:SemiBold',sans-serif] font-semibold text-[#475569] text-[12px] uppercase tracking-wide">
-                    {tipo === "ingreso" ? "Ingresos" : "Egresos"}
-                  </p>
-
-                  {categoriasPorTipo[tipo].map((c) => (
-                    <div
-                      key={c.id}
-                      className="flex items-center justify-between px-[10px] py-[8px] rounded-[6px]"
-                      style={{
-                        border: "1px solid #f1f5f9",
-                        background: c.activa === 1 ? "#f8fafc" : "#fef2f2",
-                      }}
-                    >
-                      <div className="flex items-center gap-[8px]">
-                        <span
-                          className="size-[8px] rounded-full shrink-0"
-                          style={{ background: c.color }}
-                        />
-                        <span
-                          className="font-['Geist:Regular',sans-serif] text-[13px] line-through"
-                          style={{
-                            color: c.activa === 1 ? "#0f172a" : "#94a3b8",
-                          }}
-                        >
-                          {c.nombre}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-[4px]">
-                        <button
-                          onClick={() => handleToggleCategoria(c)}
-                          className="px-[8px] py-[4px] rounded-[4px] font-['Geist:Medium',sans-serif] font-medium text-[11px] hover:bg-[#e2e8f0] transition-colors"
-                          style={{ color: "#475569" }}
-                        >
-                          {c.activa === 1 ? "Desactivar" : "Activar"}
-                        </button>
-
-                        <button
-                          onClick={() => handleBorrarCategoria(c)}
-                          className="p-[4px] rounded-[4px] hover:bg-[#fee2e2] transition-colors"
-                          title="Eliminar"
-                        >
-                          <svg
-                            fill="none"
-                            height="14"
-                            viewBox="0 0 14 14"
-                            width="14"
-                          >
-                            <path
-                              d="M2 4H12M5 4V2H9V4M6 6.5V10.5M8 6.5V10.5M3 4L4 12H10L11 4"
-                              stroke="#ef4444"
-                              strokeWidth="1.2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Bancos Admin Section */}
         {showBancosAdmin && (
           <div className="bg-white p-[20px] rounded-[12px]" style={{ border: "1px solid #e2e8f0" }}>
@@ -1317,7 +1132,7 @@ export default function Caja() {
                     {key}
                   </p>
                   <p className="font-['Geist:Bold',sans-serif] font-bold text-[#0f172a] text-[22px] mt-[4px]">
-                    {formatCurrency(val.total)}
+                    {formatMonto(val.total)}
                   </p>
                 </div>
                 <div
@@ -1531,7 +1346,7 @@ export default function Caja() {
                           style={{ borderBottom: "1px solid #f1f5f9" }}
                         >
                           <td className="font-['Geist:Regular',sans-serif] text-[#475569] text-[13px] py-[12px]">
-                            {formatFecha(m.fecha)}
+                            {formatFechaLarga(m.fecha)}
                           </td>
                           <td className="font-['Geist:Medium',sans-serif] font-medium text-[#0f172a] text-[13px] py-[12px]">
                             <div className="flex flex-col">
@@ -1556,7 +1371,7 @@ export default function Caja() {
                           </td>
                           <td className="font-['Geist:SemiBold',sans-serif] font-semibold text-[#10b981] text-[13px] py-[12px]">
                             {m.tipo === "ingreso" ? (
-                              formatCurrency(m.monto)
+                              formatMonto(m.monto)
                             ) : (
                               <span className="text-[#94a3b8]">-</span>
                             )}
@@ -1566,7 +1381,7 @@ export default function Caja() {
                               m.tipo === "egreso" ? "text-[#ef4444]" : "text-[#94a3b8]"
                             }`}
                           >
-                            {m.tipo === "egreso" ? formatCurrency(m.monto) : "-"}
+                            {m.tipo === "egreso" ? formatMonto(m.monto) : "-"}
                           </td>
                           <td className="font-['Geist:Medium',sans-serif] font-medium text-[#0f172a] text-[13px] py-[12px]">
                             {m.moneda !== "ARS" && m.tipoCambio ? (
@@ -1703,7 +1518,7 @@ export default function Caja() {
                           className="font-['Geist:Bold',sans-serif] font-bold text-[14px]"
                           style={{ color: r.color }}
                         >
-                          {formatCurrency(r.value)}
+                          {formatMonto(r.value)}
                         </p>
                       </div>
                     ))}
@@ -1739,6 +1554,7 @@ export default function Caja() {
                       subCaja: p.subCaja || cajaNombres[0] || "Efectivo",
                       fecha: toISODate(new Date()),
                     }));
+                    setErrorModal(null);
                     setShowCierreModal(true);
                   }}
                   className="flex items-center gap-[6px] bg-[#0ea5e9] hover:bg-[#0284c7] transition-colors text-white font-['Geist:SemiBold',sans-serif] font-semibold text-[12px] px-[10px] py-[6px] rounded-[6px]"
@@ -1759,7 +1575,7 @@ export default function Caja() {
                           {c.subCaja}
                         </span>
                         <span className="font-['Geist:Regular',sans-serif] text-[#94a3b8] text-[11px]">
-                          {formatFecha(c.fecha || c.fechaCierre)}
+                          {formatFechaLarga(c.fecha || c.fechaCierre)}
                         </span>
                       </div>
                       <div className="flex items-center gap-[8px]">
@@ -1772,7 +1588,7 @@ export default function Caja() {
                         >
                           {c.diferencia === 0
                             ? "$0"
-                            : `${c.diferencia > 0 ? "+" : ""}${formatCurrency(c.diferencia)}`}
+                            : `${c.diferencia > 0 ? "+" : ""}${formatMonto(c.diferencia)}`}
                         </span>
                       </div>
                     </div>
@@ -1805,6 +1621,12 @@ export default function Caja() {
               </p>
             </div>
             <div className="px-[24px] py-[20px] flex flex-col gap-[16px]">
+              {errorModal && (
+                <ErrorBanner
+                  mensaje={errorModal}
+                  onCerrar={() => setErrorModal(null)}
+                />
+              )}
               <div className="grid grid-cols-2 gap-[12px]">
                 <div>
                   <label className="font-['Geist:Medium',sans-serif] font-medium text-[#475569] text-[13px] mb-[6px] block">
@@ -2002,6 +1824,12 @@ export default function Caja() {
               </p>
             </div>
             <div className="px-[24px] py-[20px] flex flex-col gap-[16px]">
+              {errorModal && (
+                <ErrorBanner
+                  mensaje={errorModal}
+                  onCerrar={() => setErrorModal(null)}
+                />
+              )}
               <div className="grid grid-cols-2 gap-[12px]">
                 <div>
                   <label className="font-['Geist:Medium',sans-serif] font-medium text-[#475569] text-[13px] mb-[6px] block">
@@ -2072,7 +1900,7 @@ export default function Caja() {
                           Saldo inicial (último cierre)
                         </span>
                         <span className="font-['Geist:Medium',sans-serif] font-medium text-[#0f172a] text-[13px]">
-                          {formatCurrency(saldoInicial)}
+                          {formatMonto(saldoInicial)}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
@@ -2080,7 +1908,7 @@ export default function Caja() {
                           Saldo final (ingresos - egresos)
                         </span>
                         <span className="font-['Geist:Medium',sans-serif] font-medium text-[#0f172a] text-[13px]">
-                          {formatCurrency(saldoFinal)}
+                          {formatMonto(saldoFinal)}
                         </span>
                       </div>
                       <div className="h-[1px] bg-[#e2e8f0]" />
@@ -2089,7 +1917,7 @@ export default function Caja() {
                           Saldo esperado
                         </span>
                         <span className="font-['Geist:SemiBold',sans-serif] font-semibold text-[#0f172a] text-[13px]">
-                          {formatCurrency(saldoEsperado)}
+                          {formatMonto(saldoEsperado)}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
@@ -2097,7 +1925,7 @@ export default function Caja() {
                           Saldo real
                         </span>
                         <span className="font-['Geist:SemiBold',sans-serif] font-semibold text-[#0f172a] text-[13px]">
-                          {formatCurrency(saldoReal)}
+                          {formatMonto(saldoReal)}
                         </span>
                       </div>
                       <div className="h-[1px] bg-[#e2e8f0]" />
@@ -2114,7 +1942,7 @@ export default function Caja() {
                             diff === 0 ? "text-[#10b981]" : "text-[#ef4444]"
                           }`}
                         >
-                          {diff === 0 ? "$0" : `${diff > 0 ? "+" : ""}${formatCurrency(diff)}`}
+                          {diff === 0 ? "$0" : `${diff > 0 ? "+" : ""}${formatMonto(diff)}`}
                         </span>
                       </div>
                     </div>
@@ -2181,6 +2009,12 @@ export default function Caja() {
               </p>
             </div>
             <div className="px-[24px] py-[20px] flex flex-col gap-[16px]">
+              {errorModal && (
+                <ErrorBanner
+                  mensaje={errorModal}
+                  onCerrar={() => setErrorModal(null)}
+                />
+              )}
               <div>
                 <label className="font-['Geist:Medium',sans-serif] font-medium text-[#475569] text-[13px] mb-[6px] block">
                   Nombre
@@ -2304,6 +2138,12 @@ export default function Caja() {
               </p>
             </div>
             <div className="px-[24px] py-[20px] flex flex-col gap-[16px]">
+              {errorModal && (
+                <ErrorBanner
+                  mensaje={errorModal}
+                  onCerrar={() => setErrorModal(null)}
+                />
+              )}
               <div>
                 <label className="font-['Geist:Medium',sans-serif] font-medium text-[#475569] text-[13px] mb-[6px] block">
                   Nombre

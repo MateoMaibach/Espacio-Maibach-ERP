@@ -1,10 +1,12 @@
-import { useState, useEffect } from "react";
+import { useCallback, useState, useEffect } from "react";
 
 import { useNavigate } from "react-router-dom";
 
 import AppLayout from "@/layouts/AppLayout";
 
 import { IconSearch, IconPlus } from "@/components/Icons";
+
+import ErrorBanner from "@/components/ErrorBanner";
 
 import { getClientes, createCliente, updateCliente, deleteCliente } from "@/services/api";
 
@@ -77,34 +79,62 @@ export default function Clientes() {
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-  useEffect(() => {
-    getClientes()
-      .then((data) =>
-        setClientes(
-          data.map((c) => ({
-            id: c.id,
+  /** Errores de cada operacion: antes solo iban a console.error y el usuario no veia nada. */
+  const [cargando, setCargando] = useState(true);
 
-            nombre: c.nombre,
+  const [errorCarga, setErrorCarga] = useState<string | null>(null);
 
-            localidad: c.localidad || "",
+  const [errorAlta, setErrorAlta] = useState<string | null>(null);
 
-            telefono: c.telefono || "",
+  const [errorEdicion, setErrorEdicion] = useState<string | null>(null);
 
-            dni: c.dni || "",
+  const [errorEliminar, setErrorEliminar] = useState<string | null>(null);
 
-            email: c.email || "",
+  const [eliminando, setEliminando] = useState(false);
 
-            direccion: c.direccion || "",
+  const [puedeForzar, setPuedeForzar] = useState(false);
 
-            estado: c.estado || "Activo",
+  const cargarClientes = useCallback(async () => {
+    setCargando(true);
 
-            fechaAlta: c.fechaAlta,
-          })),
-        ),
-      )
+    try {
+      const data = await getClientes();
 
-      .catch(console.error);
+      setClientes(
+        data.map((c) => ({
+          id: c.id,
+
+          nombre: c.nombre,
+
+          localidad: c.localidad || "",
+
+          telefono: c.telefono || "",
+
+          dni: c.dni || "",
+
+          email: c.email || "",
+
+          direccion: c.direccion || "",
+
+          estado: c.estado || "Activo",
+
+          fechaAlta: c.fechaAlta,
+        })),
+      );
+
+      setErrorCarga(null);
+    } catch (e) {
+      setErrorCarga(
+        e instanceof Error ? e.message : "No se pudieron cargar los clientes",
+      );
+    } finally {
+      setCargando(false);
+    }
   }, []);
+
+  useEffect(() => {
+    cargarClientes();
+  }, [cargarClientes]);
 
   const filtered = clientes.filter((c) => {
     const matchSearch =
@@ -208,8 +238,12 @@ export default function Clientes() {
       setShowModal(false);
 
       setForm(estadoInicial);
+
+      setErrorAlta(null);
     } catch (e) {
-      console.error(e);
+      setErrorAlta(
+        e instanceof Error ? e.message : "No se pudo crear el cliente",
+      );
     }
   }
 
@@ -219,6 +253,8 @@ export default function Clientes() {
     setForm(estadoInicial);
 
     setErrors({});
+
+    setErrorAlta(null);
   }
 
   function handleOpenEdit(cliente: Cliente, e: React.MouseEvent) {
@@ -237,12 +273,14 @@ export default function Clientes() {
 
       direccion: cliente.direccion,
 
-      localidad: cliente.localidad || "Paraná",
+      localidad: cliente.localidad,
 
       estado: cliente.estado || "Activo",
     });
 
     setEditErrors({});
+
+    setErrorEdicion(null);
 
     setShowEditModal(true);
   }
@@ -307,8 +345,12 @@ export default function Clientes() {
       setShowEditModal(false);
 
       setEditingCliente(null);
+
+      setErrorEdicion(null);
     } catch (e) {
-      console.error(e);
+      setErrorEdicion(
+        e instanceof Error ? e.message : "No se pudieron guardar los cambios",
+      );
     }
   }
 
@@ -317,22 +359,41 @@ export default function Clientes() {
 
     setDeletingCliente(cliente);
 
+    setErrorEliminar(null);
+
+    setPuedeForzar(false);
+
     setShowDeleteConfirm(true);
   }
 
-  async function handleConfirmarEliminar() {
-    if (!deletingCliente) return;
+  async function handleConfirmarEliminar(forzar = false) {
+    if (!deletingCliente || eliminando) return;
+
+    setEliminando(true);
+
+    setErrorEliminar(null);
 
     try {
-      await deleteCliente(deletingCliente.id);
+      await deleteCliente(deletingCliente.id, forzar);
 
       setClientes((prev) => prev.filter((c) => c.id !== deletingCliente.id));
 
       setShowDeleteConfirm(false);
 
       setDeletingCliente(null);
+
+      setPuedeForzar(false);
     } catch (e) {
-      console.error(e);
+      const mensaje =
+        e instanceof Error ? e.message : "No se pudo eliminar el cliente";
+
+      setErrorEliminar(mensaje);
+
+      // El backend pide ?forzar=1 cuando hay cuotas cobradas; ofrecerlo
+      // explicitamente evita que el boton parezca roto.
+      setPuedeForzar(!forzar && mensaje.includes("forzar"));
+    } finally {
+      setEliminando(false);
     }
   }
 
@@ -409,6 +470,10 @@ export default function Clientes() {
           </select>
         </div>
 
+        {errorCarga && (
+          <ErrorBanner mensaje={errorCarga} onReintentar={cargarClientes} />
+        )}
+
         {/* Table */}
         <div
           className="bg-white rounded-[12px] overflow-hidden"
@@ -428,11 +493,33 @@ export default function Clientes() {
               </tr>
             </thead>
             <tbody>
+              {cargando && (
+                <tr>
+                  <td
+                    colSpan={6}
+                    className="px-[20px] py-[24px] text-center font-['Geist:Regular',sans-serif] text-[#94a3b8] text-[13px]"
+                  >
+                    Cargando clientes…
+                  </td>
+                </tr>
+              )}
+
+              {!cargando && filtered.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={6}
+                    className="px-[20px] py-[24px] text-center font-['Geist:Regular',sans-serif] text-[#94a3b8] text-[13px]"
+                  >
+                    No hay clientes que coincidan con los filtros.
+                  </td>
+                </tr>
+              )}
+
               {filtered.map((c, i) => (
                 <tr
                   key={c.id}
                   onClick={() => navigate(`/clientes/${c.id}`)}
-                  className="cursor-pointer hover:bg-[#f8fafc] transition-colors"
+                  className="group cursor-pointer hover:bg-[#f8fafc] transition-colors"
                   style={{
                     borderBottom: i < filtered.length - 1 ? "1px solid #f1f5f9" : "none",
                   }}
@@ -537,6 +624,14 @@ export default function Clientes() {
             </div>
 
             <div className="px-[24px] py-[20px] flex flex-col gap-[16px]">
+              {errorAlta && (
+                <div className="rounded-[8px] bg-[#fef2f2] p-[10px]">
+                  <p className="font-['Geist:Regular',sans-serif] text-[#b91c1c] text-[12px]">
+                    {errorAlta}
+                  </p>
+                </div>
+              )}
+
               <div>
                 <label className="font-['Geist:Medium',sans-serif] font-medium text-[#475569] text-[13px] mb-[6px] block">
                   Nombre completo *
@@ -688,6 +783,14 @@ export default function Clientes() {
             </div>
 
             <div className="px-[24px] py-[20px] flex flex-col gap-[16px]">
+              {errorEdicion && (
+                <div className="rounded-[8px] bg-[#fef2f2] p-[10px]">
+                  <p className="font-['Geist:Regular',sans-serif] text-[#b91c1c] text-[12px]">
+                    {errorEdicion}
+                  </p>
+                </div>
+              )}
+
               <div>
                 <label className="font-['Geist:Medium',sans-serif] font-medium text-[#475569] text-[13px] mb-[6px] block">
                   Nombre completo *
@@ -839,6 +942,14 @@ export default function Clientes() {
                 <span className="font-semibold">{deletingCliente.nombre}</span>? Esta acción
                 eliminará todos sus ficheros y cuotas asociados. No se puede deshacer.
               </p>
+
+              {errorEliminar && (
+                <div className="rounded-[8px] bg-[#fef2f2] p-[10px]">
+                  <p className="font-['Geist:Regular',sans-serif] text-[#b91c1c] text-[12px]">
+                    {errorEliminar}
+                  </p>
+                </div>
+              )}
             </div>
             <div
               className="flex items-center justify-end gap-[12px] px-[24px] py-[20px]"
@@ -853,12 +964,23 @@ export default function Clientes() {
               >
                 Cancelar
               </button>
-              <button
-                onClick={handleConfirmarEliminar}
-                className="font-['Geist:SemiBold',sans-serif] font-semibold text-[14px] text-white bg-[#ef4444] hover:bg-[#dc2626] transition-colors px-[16px] py-[10px] rounded-[8px]"
-              >
-                Eliminar
-              </button>
+              {puedeForzar ? (
+                <button
+                  onClick={() => handleConfirmarEliminar(true)}
+                  disabled={eliminando}
+                  className="font-['Geist:SemiBold',sans-serif] font-semibold text-[14px] text-white bg-[#ef4444] hover:bg-[#dc2626] transition-colors px-[16px] py-[10px] rounded-[8px] disabled:opacity-50"
+                >
+                  {eliminando ? "Eliminando…" : "Eliminar igual (borra el historial)"}
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleConfirmarEliminar()}
+                  disabled={eliminando}
+                  className="font-['Geist:SemiBold',sans-serif] font-semibold text-[14px] text-white bg-[#ef4444] hover:bg-[#dc2626] transition-colors px-[16px] py-[10px] rounded-[8px] disabled:opacity-50"
+                >
+                  {eliminando ? "Eliminando…" : "Eliminar"}
+                </button>
+              )}
             </div>
           </div>
         </div>

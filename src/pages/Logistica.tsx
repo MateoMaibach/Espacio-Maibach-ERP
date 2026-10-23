@@ -12,16 +12,9 @@ import {
   type Remito,
 } from "@/services/api";
 import RemitoFormModal from "@/components/RemitoFormModal";
-
-function formatMonto(valor: number) {
-  return `$${valor.toLocaleString("es-AR")}`;
-}
-
-function formatFecha(fecha: string) {
-  if (!fecha) return "—";
-  const [a, m, d] = fecha.split("-");
-  return `${d}/${m}/${a}`;
-}
+import ErrorBanner from "@/components/ErrorBanner";
+import { formatFecha } from "@/utils/fecha";
+import { formatMonto } from "@/utils/money";
 
 const estadoStyle: Record<string, { bg: string; color: string }> = {
   Emitido: { bg: "#d1fae5", color: "#10b981" },
@@ -39,6 +32,10 @@ export default function Logistica() {
   const [depositos, setDepositos] = useState<Deposito[]>([]);
   const [articulos, setArticulos] = useState<Articulo[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const [error, setError] = useState<string | null>(null);
+
+  const [errorDetalle, setErrorDetalle] = useState<string | null>(null);
 
   const [filtroTipo, setFiltroTipo] = useState("");
   const [filtroDeposito, setFiltroDeposito] = useState("");
@@ -63,9 +60,9 @@ export default function Logistica() {
       ]);
       setRemitos(remitosRes);
       setDepositos(deps);
+      setError(null);
     } catch (err) {
-      console.error(err);
-      alert("Error al cargar los remitos");
+      setError(err instanceof Error ? err.message : "Error al cargar los remitos");
     } finally {
       setLoading(false);
     }
@@ -78,16 +75,23 @@ export default function Logistica() {
   useEffect(() => {
     getArticulos()
       .then(setArticulos)
-      .catch((err) => console.error(err));
+      .catch((err) =>
+        setError(
+          err instanceof Error ? err.message : "Error al cargar los artículos",
+        ),
+      );
   }, []);
 
   async function abrirDetalle(id: string) {
     setCargandoDetalle(true);
     setDetalle(null);
+    setErrorDetalle(null);
     try {
       setDetalle(await getRemito(id));
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Error al cargar el remito");
+      setErrorDetalle(
+        err instanceof Error ? err.message : "Error al cargar el remito",
+      );
     } finally {
       setCargandoDetalle(false);
     }
@@ -101,7 +105,9 @@ export default function Logistica() {
       setDetalle(null);
       await cargar();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Error al anular el remito");
+      setErrorDetalle(
+        err instanceof Error ? err.message : "Error al anular el remito",
+      );
     } finally {
       setAnulando(false);
     }
@@ -133,6 +139,14 @@ export default function Logistica() {
       breadcrumbs={[{ label: "Inicio", onClick: () => navigate("/") }, { label: "Logística" }]}
     >
       <div className="p-[32px] flex flex-col gap-[24px]">
+        {error && (
+          <ErrorBanner
+            mensaje={error}
+            onReintentar={cargar}
+            onCerrar={() => setError(null)}
+          />
+        )}
+
         <div className="flex items-start justify-between">
           <div>
             <p className="font-['Geist:Bold',sans-serif] font-bold text-[#0f172a] text-[24px]">
@@ -417,6 +431,15 @@ export default function Logistica() {
                 </svg>
               </button>
             </div>
+
+            {errorDetalle && (
+              <div className="px-[24px] pt-[16px]">
+                <ErrorBanner
+                  mensaje={errorDetalle}
+                  onCerrar={() => setErrorDetalle(null)}
+                />
+              </div>
+            )}
 
             {detalle && (
               <div className="px-[24px] py-[20px]">

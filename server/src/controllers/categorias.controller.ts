@@ -20,6 +20,13 @@ export const CAT_PAGO_PROVEEDOR = "Pago proveedor"
 export const CAT_AJUSTE_CIERRE = "Ajuste por cierre"
 
 /**
+ * Categorias que la app escribe por nombre literal. Renombrarlas o cambiarles
+ * el tipo dejaria huerfanas las escrituras automaticas, asi que no se tocan
+ * desde el CRUD (si se pueden desactivar, pero la app las sigue usando).
+ */
+export const CATEGORIAS_SISTEMA = new Set([CAT_PAGO_PROVEEDOR, CAT_AJUSTE_CIERRE])
+
+/**
  * Devuelve la categoria solo si existe en el catalogo, para no dejar valores
  * que el selector del front no pueda mostrar.
  */
@@ -57,22 +64,6 @@ export function getAll(req: Request, res: Response) {
     .where(conds.length ? and(...conds) : undefined)
     .orderBy(asc(categorias.orden), asc(categorias.nombre))
     .all()
-
-  res.json(rows)
-}
-
-/** Nombre de la categoria mas usada, para sugerir valores nuevos. */
-export function getUsadas(_req: Request, res: Response) {
-  const rows = db
-    .select({
-      categoria: movimientos.categoria,
-      n: sql<number>`count(*)`,
-    })
-    .from(movimientos)
-    .groupBy(movimientos.categoria)
-    .all()
-    .filter((r) => r.categoria)
-    .sort((a, b) => b.n - a.n)
 
   res.json(rows)
 }
@@ -147,6 +138,22 @@ export function update(req: Request, res: Response) {
 
   const { nombre, tipo, color, orden, activa } = req.body
 
+  /**
+   * Un PUT sin campos hacia `.set({})`, que Drizzle rechaza y terminaba en 500.
+   * Un body vacio es un pedido invalido, no una falla del servidor.
+   */
+  if (
+    nombre === undefined &&
+    tipo === undefined &&
+    color === undefined &&
+    orden === undefined &&
+    activa === undefined
+  ) {
+    res.status(400).json({ error: "No hay campos para actualizar" })
+
+    return
+  }
+
   let nombreLimpio: string | undefined
 
   if (nombre !== undefined) {
@@ -181,16 +188,43 @@ export function update(req: Request, res: Response) {
     return
   }
 
-  db.update(categorias)
-    .set({
-      ...(nombreLimpio !== undefined && { nombre: nombreLimpio }),
-      ...(tipo !== undefined && { tipo }),
-      ...(color !== undefined && { color: String(color).trim() }),
-      ...(orden !== undefined && { orden }),
-      ...(activa !== undefined && { activa: activa ? 1 : 0 }),
+  const cambiaNombre = nombreLimpio !== undefined && nombreLimpio !== existing.nombre
+
+  const cambiaTipo = tipo !== undefined && tipo !== existing.tipo
+
+  if (CATEGORIAS_SISTEMA.has(existing.nombre) && (cambiaNombre || cambiaTipo)) {
+    res.status(409).json({
+      error: `"${existing.nombre}" la usa la app automaticamente: no se puede renombrar ni cambiar de tipo.`,
     })
-    .where(eq(categorias.id, existing.id))
-    .run()
+
+    return
+  }
+
+  /**
+   * `movimientos.categoria` guarda el NOMBRE, no el id, y no tiene FK. Sin
+   * cascada, renombrar dejaba todos los movimientos viejos apuntando a un
+   * nombre que ya no existe: desaparecian de los reportes por categoria y el
+   * DELETE los contaba como 0 usos.
+   */
+  db.transaction((tx) => {
+    if (cambiaNombre) {
+      tx.update(movimientos)
+        .set({ categoria: nombreLimpio as string })
+        .where(eq(movimientos.categoria, existing.nombre))
+        .run()
+    }
+
+    tx.update(categorias)
+      .set({
+        ...(nombreLimpio !== undefined && { nombre: nombreLimpio }),
+        ...(tipo !== undefined && { tipo }),
+        ...(color !== undefined && { color: String(color).trim() }),
+        ...(orden !== undefined && { orden }),
+        ...(activa !== undefined && { activa: activa ? 1 : 0 }),
+      })
+      .where(eq(categorias.id, existing.id))
+      .run()
+  })
 
   res.json({ ok: true })
 }
@@ -204,6 +238,14 @@ export function remove(req: Request, res: Response) {
 
   if (!existing) {
     res.status(404).json({ error: "Categoría no encontrada" })
+
+    return
+  }
+
+  if (CATEGORIAS_SISTEMA.has(existing.nombre)) {
+    res.status(409).json({
+      error: `"${existing.nombre}" la usa la app automaticamente: no se puede eliminar.`,
+    })
 
     return
   }

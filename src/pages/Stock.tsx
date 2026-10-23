@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AppLayout from "@/layouts/AppLayout";
 import { IconSearch, IconPlus } from "@/components/Icons";
+import ErrorBanner from "@/components/ErrorBanner";
 import {
   getArticulos,
   getDepositos,
@@ -18,6 +19,8 @@ import {
   type MovimientoStock,
 } from "@/services/api";
 import DepositoFormModal from "@/components/DepositoFormModal";
+import { formatFecha } from "@/utils/fecha";
+import { formatMonto } from "@/utils/money";
 import ArticuloFormModal from "@/components/ArticuloFormModal";
 import HistorialCostosModal from "@/components/HistorialCostosModal";
 import MovimientoStockModal from "@/components/MovimientoStockModal";
@@ -37,6 +40,9 @@ const tipoStyle: Record<string, { bg: string; color: string }> = {
   egreso: { bg: "#fee2e2", color: "#ef4444" },
   transferencia: { bg: "#e0f2fe", color: "#0284c7" },
   ajuste: { bg: "#fef3c7", color: "#f59e0b" },
+  // La anulación de un remito no borra el movimiento: deja una compensación
+  // de este tipo, para que el kardex muestre la salida y su reversa.
+  anulacion: { bg: "#e2e8f0", color: "#64748b" },
 };
 
 const depEstadoStyle: Record<string, { bg: string; color: string }> = {
@@ -49,20 +55,11 @@ const negativoStyle: Record<string, { bg: string; color: string }> = {
   ok: { bg: "#d1fae5", color: "#10b981" },
 };
 
-function formatMonto(valor: number) {
-  return `$${valor.toLocaleString("es-AR")}`;
-}
-
-function formatFecha(fecha: string) {
-  if (!fecha) return "—";
-  const [a, m, d] = fecha.split("-");
-  return `${d}/${m}/${a}`;
-}
-
 export default function Stock() {
   const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>("existencias");
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const [depositos, setDepositos] = useState<Deposito[]>([]);
   const [articulos, setArticulos] = useState<Articulo[]>([]);
@@ -118,8 +115,9 @@ export default function Stock() {
       setDepositos(deps);
       setArticulos(arts);
     } catch (err) {
-      console.error(err);
-      alert("Error al cargar los datos de stock");
+      setError(
+        err instanceof Error ? err.message : "Error al cargar los datos de stock",
+      );
     }
   }, []);
 
@@ -130,8 +128,9 @@ export default function Stock() {
       setValorTotal(res.valorTotal);
       setConNegativo(res.conStockNegativo);
     } catch (err) {
-      console.error(err);
-      alert("Error al cargar las existencias");
+      setError(
+        err instanceof Error ? err.message : "Error al cargar las existencias",
+      );
     }
   }, [filtroDeposito]);
 
@@ -146,8 +145,9 @@ export default function Stock() {
         }),
       );
     } catch (err) {
-      console.error(err);
-      alert("Error al cargar los movimientos");
+      setError(
+        err instanceof Error ? err.message : "Error al cargar los movimientos",
+      );
     }
   }, [filtroDeposito, filtroTipo, filtroDesde, filtroHasta]);
 
@@ -170,8 +170,9 @@ export default function Stock() {
         })),
       );
     } catch (err) {
-      console.error(err);
-      alert("Error al cargar los reportes");
+      setError(
+        err instanceof Error ? err.message : "Error al cargar los reportes",
+      );
     }
   }, []);
 
@@ -195,6 +196,8 @@ export default function Stock() {
   }, [tab, loading, cargarExistencias, cargarMovimientos, cargarReportes]);
 
   async function refrescarTodo() {
+    setError(null);
+
     await cargarBase();
     if (tab === "existencias") await cargarExistencias();
     if (tab === "movimientos") await cargarMovimientos();
@@ -209,7 +212,7 @@ export default function Stock() {
       setEliminando(null);
       await refrescarTodo();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Error al eliminar");
+      setError(err instanceof Error ? err.message : "Error al eliminar");
     }
   }
 
@@ -239,6 +242,14 @@ export default function Stock() {
       breadcrumbs={[{ label: "Inicio", onClick: () => navigate("/") }, { label: "Stock" }]}
     >
       <div className="p-[32px] flex flex-col gap-[24px]">
+        {error && (
+          <ErrorBanner
+            mensaje={error}
+            onReintentar={refrescarTodo}
+            onCerrar={() => setError(null)}
+          />
+        )}
+
         <div className="flex items-start justify-between">
           <div>
             <p className="font-['Geist:Bold',sans-serif] font-bold text-[#0f172a] text-[24px]">
@@ -683,6 +694,7 @@ export default function Stock() {
                     <option value="egreso">Egreso</option>
                     <option value="transferencia">Transferencia</option>
                     <option value="ajuste">Ajuste</option>
+                    <option value="anulacion">Anulación</option>
                   </select>
                 </div>
 

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { createArticulo, updateArticulo, type Articulo } from "@/services/api";
+import { parseMonto } from "@/utils/money";
 
 interface Props {
   articulo?: Articulo;
@@ -11,11 +12,6 @@ const labelClass =
   "font-['Geist:Medium',sans-serif] font-medium text-[#475569] text-[13px] mb-[6px] block";
 const baseInput =
   "w-full font-['Geist:Regular',sans-serif] text-[14px] text-[#0f172a] px-[12px] py-[9px] rounded-[8px] outline-none transition-colors bg-white border border-[#e2e8f0] focus:border-[#0ea5e9]";
-
-function parseMonto(valor: string): number {
-  const limpio = valor.replace(/\./g, "").replace(",", ".").trim();
-  return Number(limpio);
-}
 
 export default function ArticuloFormModal({ articulo, onClose, onSaved }: Props) {
   const [codigo, setCodigo] = useState(articulo?.codigo ?? "");

@@ -8,9 +8,17 @@ import { ficheros, clientes } from "../db/schema.js"
 
 import { eq } from "drizzle-orm"
 
-import { calcularDerivados, leerInsumos, parseMonto } from "../services/fichero.costs.js"
+import {
+  calcularDerivados,
+  leerInsumos,
+  ventaEnPesos,
+} from "../services/fichero.costs.js"
+
+import { aCentavos } from "../services/money.js"
 
 import { assertMesAbierto } from "../services/periodos.service.js"
+
+import { hoyISO } from "../utils/fecha.js"
 
 /**
  * Agrega a un fichero los derivados (comisionMonto, totalCostos, margenNeto,
@@ -28,7 +36,7 @@ export function conDerivados<T extends typeof ficheros.$inferSelect>(
 } {
   return {
     ...fila,
-    ...calcularDerivados(parseMonto(fila.total), {
+    ...calcularDerivados(ventaEnPesos(fila), {
       costoPiscina: fila.costoPiscina,
       costoInstalacion: fila.costoInstalacion,
       costoEquipoFiltrado: fila.costoEquipoFiltrado,
@@ -108,13 +116,16 @@ export function upsert(req: Request, res: Response) {
     }
   }
 
-  try {
-    assertMesAbierto(fecha ? String(fecha) : "")
-  } catch (e) {
-    res.status(409).json({ error: (e as Error).message })
+  // El alta usaba `fecha ? fecha : ""`, y con "" el guard de mes cerrado no
+// podia hacer nada: un fichero nuevo sin fecha caia en cualquier mes y quedaba
+// invisible para el cierre. Sin fecha se usa la de hoy.
+try {
+  assertMesAbierto(fecha ? String(fecha) : hoyISO())
+} catch (e) {
+  res.status(409).json({ error: (e as Error).message })
 
-    return
-  }
+  return
+}
 
   if (existing) {
     db.update(ficheros)
@@ -129,7 +140,10 @@ export function upsert(req: Request, res: Response) {
           items: typeof items === "string" ? items : JSON.stringify(items),
         }),
 
-        ...(total !== undefined && { total }),
+        ...(total !== undefined && {
+          total,
+          totalCentavos: aCentavos(total),
+        }),
 
         ...insumos,
 
@@ -163,6 +177,8 @@ export function upsert(req: Request, res: Response) {
         items: typeof items === "string" ? items : JSON.stringify(items || []),
 
         total: total || "$0",
+
+        totalCentavos: aCentavos(total || 0),
 
         ...insumos,
 

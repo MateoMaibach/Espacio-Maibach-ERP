@@ -10,9 +10,18 @@ import {
   formatCurrency,
   parseCurrencyInput,
   getCurrentDate,
+  parsearFechaCobro,
   type FicheroItem,
   type FicheroForm,
 } from "@/data/clienteDetalleData";
+
+import { calcularResumenCobros, calcularTotalesFichero } from "@/utils/fichero";
+
+import {
+  mapFichero,
+  type ClienteData,
+  type Cuota,
+} from "@/utils/clienteDetalle";
 
 import {
   getCliente,
@@ -28,177 +37,13 @@ import {
   deleteFichero,
   getProveedores,
   type Proveedor,
+  getCajas,
+  type CajaItem,
 } from "@/services/api";
 
 import LocalidadSelector from "@/components/LocalidadSelector";
 
-interface Cuota {
-  id: string;
-
-  nro: number;
-
-  fechaVencimiento: string;
-
-  montoPlanificado: number;
-
-  montoPagado: number;
-
-  fechaPago: string | null;
-
-  metodo: string | null;
-
-  comprobante: string;
-
-  observaciones: string;
-
-  estado: "Pendiente" | "Parcial" | "Pagada";
-
-  descripcion?: string;
-}
-
-interface FicheroData {
-  fecha: string;
-
-  vendedor: string;
-
-  comision: string;
-
-  items: { desc: string; cant: string; precio: string }[];
-
-  total: string;
-
-  // Insumos: numerico en la base, se formatea solo para mostrar.
-  costoPiscina: number;
-
-  costoInstalacion: number;
-
-  costoEquipoFiltrado: number;
-
-  costoManoObra: number;
-
-  manoObraVeredaAplica: number;
-
-  comisionPct: number;
-
-  proveedor: string | null;
-
-  // Derivados: los calcula el server en cada lectura, no se guardan.
-  venta: number;
-
-  comisionMonto: number;
-
-  totalCostos: number;
-
-  margenNeto: number;
-
-  margenPct: number;
-
-  cuotas: Cuota[];
-}
-
-interface ClienteData {
-  id: string;
-
-  nombre: string;
-
-  direccion: string;
-
-  localidad: string;
-
-  telefono: string;
-
-  email: string;
-
-  dni: string;
-
-  fechaAlta: string;
-
-  estado: string;
-
-  fichero: FicheroData | null;
-
-  cuotas: any[];
-}
-
-function mapCuota(c: any): Cuota {
-  return {
-    id: c.id,
-
-    nro: c.nroCuota,
-
-    fechaVencimiento: c.fechaVencimiento,
-
-    montoPlanificado: c.montoPlanificado,
-
-    montoPagado: c.montoPagado,
-
-    fechaPago: c.fechaPago || null,
-
-    metodo: c.metodo || null,
-
-    comprobante: c.comprobante || "",
-
-    observaciones: c.observaciones || "",
-
-    estado: c.estado,
-
-    descripcion: c.descripcion || undefined,
-  };
-}
-
-function mapFichero(raw: any, cuotasRaw: any[]): FicheroData {
-  let items: { desc: string; cant: string; precio: string }[] = [];
-
-  try {
-    items = JSON.parse(raw.items || "[]");
-  } catch {
-    /* ok */
-  }
-
-  const num = (v: unknown) => {
-    const n = Number(v);
-
-    return Number.isFinite(n) ? n : 0;
-  };
-
-  return {
-    fecha: raw.fecha,
-
-    vendedor: raw.vendedor,
-
-    comision: raw.comision || "",
-
-    items,
-
-    total: raw.total || "$0",
-
-    costoPiscina: num(raw.costoPiscina),
-
-    costoInstalacion: num(raw.costoInstalacion),
-
-    costoEquipoFiltrado: num(raw.costoEquipoFiltrado),
-
-    costoManoObra: num(raw.costoManoObra),
-
-    manoObraVeredaAplica: num(raw.manoObraVeredaAplica) === 0 ? 0 : 1,
-
-    comisionPct: num(raw.comisionPct),
-
-    proveedor: raw.proveedor ?? null,
-
-    venta: num(raw.venta ?? raw.total),
-
-    comisionMonto: num(raw.comisionMonto),
-
-    totalCostos: num(raw.totalCostos),
-
-    margenNeto: num(raw.margenNeto),
-
-    margenPct: num(raw.margenPct),
-
-    cuotas: cuotasRaw.map(mapCuota),
-  };
-}
+import ErrorBanner from "@/components/ErrorBanner";
 
 const estadoStyle: Record<string, { bg: string; color: string }> = {
   Activo: { bg: "#d1fae5", color: "#10b981" },
@@ -216,6 +61,11 @@ export default function ClienteDetalle() {
   const [cliente, setCliente] = useState<ClienteData | null>(null);
 
   const [loading, setLoading] = useState(true);
+
+  /** Errores de carga y de acciones: antes solo iban a console.error. */
+  const [errorCarga, setErrorCarga] = useState<string | null>(null);
+
+  const [errorAccion, setErrorAccion] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -249,7 +99,11 @@ export default function ClienteDetalle() {
         });
       })
 
-      .catch(console.error)
+      .catch((e) =>
+        setErrorCarga(
+          e instanceof Error ? e.message : "No se pudo cargar el cliente",
+        ),
+      )
 
       .finally(() => setLoading(false));
   }, [id]);
@@ -264,7 +118,24 @@ export default function ClienteDetalle() {
         );
       })
 
-      .catch(console.error);
+      .catch((e) =>
+        setErrorAccion(
+          e instanceof Error ? e.message : "No se pudieron cargar los proveedores",
+        ),
+      );
+  }, []);
+
+  const [cajas, setCajas] = useState<CajaItem[]>([]);
+
+  useEffect(() => {
+    getCajas()
+      .then((data) => setCajas(data.filter((c) => c.activa === 1)))
+
+      .catch((e) =>
+        setErrorAccion(
+          e instanceof Error ? e.message : "No se pudieron cargar las cajas",
+        ),
+      );
   }, []);
 
   const sinFichero = !cliente?.fichero;
@@ -354,6 +225,7 @@ export default function ClienteDetalle() {
     fecha: getCurrentDate(),
     monto: "",
     metodo: "Transferencia",
+    subCaja: "Efectivo",
     comprobante: "",
     observaciones: "",
   });
@@ -385,58 +257,40 @@ export default function ClienteDetalle() {
 
   const [showDeleteClienteConfirm, setShowDeleteClienteConfirm] = useState(false);
 
+  const [errorEliminarCliente, setErrorEliminarCliente] = useState<string | null>(null);
+
+  const [eliminandoCliente, setEliminandoCliente] = useState(false);
+
+  const [puedeForzarEliminar, setPuedeForzarEliminar] = useState(false);
+
   // Fichero calculated values
 
-  const itemsSubtotales = ficheroForm.items.map((item) => {
-    const cant = parseCurrencyInput(item.cant);
-
-    const precio = parseCurrencyInput(item.precioUnitario);
-
-    return cant * precio;
-  });
-
-  const importeTotal = itemsSubtotales.reduce((sum, sub) => sum + sub, 0);
-
-  const comisionDolar = importeTotal * (parseCurrencyInput(ficheroForm.comisionPct) / 100);
-
-  const costoPiscina = parseCurrencyInput(ficheroForm.costoPiscina);
-
-  const costoInst = parseCurrencyInput(ficheroForm.costoInstalacion);
-
-  const costoEquipo = parseCurrencyInput(ficheroForm.equipoFiltrado);
-
-  const costoManoObra = ficheroForm.manoObraVereda
-    ? parseCurrencyInput(ficheroForm.costoManoObra)
-    : 0;
-
-  const totalCostos = costoPiscina + costoInst + costoEquipo + costoManoObra + comisionDolar;
-
-  const margenNeto = importeTotal - totalCostos;
-
-  const margenPct = importeTotal > 0 ? (margenNeto / importeTotal) * 100 : 0;
+  const {
+    itemsSubtotales,
+    importeTotal,
+    comision: comisionDolar,
+    costoPiscina,
+    costoInstalacion: costoInst,
+    costoEquipo,
+    costoManoObra,
+    totalCostos,
+    margenNeto,
+    margenPct,
+  } = calcularTotalesFichero(ficheroForm);
 
   // Unified cobros computed values
 
-  const ficheroTotal = cliente?.fichero ? parseCurrencyInput(cliente.fichero.total) : 0;
-
-  const tienePagoInicial = (cliente?.fichero?.cuotas ?? []).some((c) => c.nro === 0);
-
-  const pagoInicialMonto = cliente?.fichero?.cuotas.find((c) => c.nro === 0)?.montoPlanificado ?? 0;
-
-  const totalCostoCobros =
-    cliente?.fichero?.cuotas
-      .filter((c) => c.nro > 0)
-      .reduce((sum, cu) => sum + cu.montoPlanificado, 0) ?? 0;
-
-  const totalIngresos = cliente?.fichero?.cuotas.reduce((sum, cu) => sum + cu.montoPagado, 0) ?? 0;
-
-  const saldoPendienteTotal = ficheroTotal - totalIngresos;
-
-  const saldoParaCuotas = ficheroTotal - pagoInicialMonto;
-
-  const porcentajePagado = ficheroTotal > 0 ? (totalIngresos / ficheroTotal) * 100 : 0;
-
-  const estaPagado = saldoPendienteTotal <= 0 && ficheroTotal > 0;
+  const {
+    ficheroTotal,
+    tienePagoInicial,
+    pagoInicialMonto,
+    totalCostoCobros,
+    totalIngresos,
+    saldoPendienteTotal,
+    saldoParaCuotas,
+    porcentajePagado,
+    estaPagado,
+  } = calcularResumenCobros(cliente?.fichero?.total, cliente?.fichero?.cuotas ?? []);
 
   function reloadCliente() {
     if (!id) return;
@@ -466,8 +320,18 @@ export default function ClienteDetalle() {
 
           cuotas: data.cuotas || [],
         });
+
+        setErrorCarga(null);
       })
-      .catch(console.error);
+      .catch((e) =>
+        setErrorCarga(
+          e instanceof Error ? e.message : "No se pudo actualizar el cliente",
+        ),
+      );
+  }
+
+  function mostrarErrorAccion(e: unknown, fallback: string) {
+    setErrorAccion(e instanceof Error ? e.message : fallback);
   }
 
   // --- Fichero handlers ---
@@ -629,8 +493,10 @@ export default function ClienteDetalle() {
       });
 
       setFicheroErrors({});
+
+      setErrorAccion(null);
     } catch (e) {
-      console.error(e);
+      mostrarErrorAccion(e, "No se pudo guardar el fichero");
     }
   }
 
@@ -683,8 +549,10 @@ export default function ClienteDetalle() {
       });
 
       setPagoInicialErrors({});
+
+      setErrorAccion(null);
     } catch (e) {
-      console.error(e);
+      mostrarErrorAccion(e, "No se pudo registrar el pago");
     }
   }
 
@@ -703,8 +571,10 @@ export default function ClienteDetalle() {
       setCantCuotas(3);
 
       setFechaPrimerVto(getCurrentDate());
+
+      setErrorAccion(null);
     } catch (e) {
-      console.error(e);
+      mostrarErrorAccion(e, "No se pudo generar el plan de cuotas");
     }
   }
 
@@ -737,8 +607,10 @@ export default function ClienteDetalle() {
       setCargoForm({ fecha: getCurrentDate(), monto: "", descripcion: "" });
 
       setCargoErrors({});
+
+      setErrorAccion(null);
     } catch (e) {
-      console.error(e);
+      mostrarErrorAccion(e, "No se pudo agregar el cargo");
     }
   }
 
@@ -751,6 +623,7 @@ export default function ClienteDetalle() {
       fecha: getCurrentDate(),
       monto: String(saldoCuota),
       metodo: "Transferencia",
+      subCaja: cobroForm.subCaja || "Efectivo",
       comprobante: "",
       observaciones: "",
     });
@@ -765,7 +638,9 @@ export default function ClienteDetalle() {
 
     const errors: Record<string, string> = {};
 
-    if (!cobroForm.fecha.trim()) errors.fecha = "Requerido";
+    const fechaIso = parsearFechaCobro(cobroForm.fecha);
+
+    if (!fechaIso) errors.fecha = "Fecha inválida (dd/mm/aaaa)";
 
     const monto = parseCurrencyInput(cobroForm.monto);
 
@@ -790,6 +665,14 @@ export default function ClienteDetalle() {
         comprobante: cobroForm.comprobante,
 
         observaciones: cobroForm.observaciones,
+
+        // Antes se pedia en el modal y nunca se mandaba: el server sellaba
+        // siempre la fecha de hoy.
+        fecha: fechaIso ?? undefined,
+
+        // El cobro genera un ingreso de caja, asi que hay que saber en que
+        // sub-caja entra el efectivo.
+        subCaja: cobroForm.subCaja,
       });
 
       reloadCliente();
@@ -802,13 +685,16 @@ export default function ClienteDetalle() {
         fecha: getCurrentDate(),
         monto: "",
         metodo: "Transferencia",
+        subCaja: "Efectivo",
         comprobante: "",
         observaciones: "",
       });
 
       setCobroErrors({});
+
+      setErrorAccion(null);
     } catch (e) {
-      console.error(e);
+      mostrarErrorAccion(e, "No se pudo registrar el cobro");
     }
   }
 
@@ -852,8 +738,10 @@ export default function ClienteDetalle() {
       setShowEditarCuotaModal(false);
 
       setEditingCuota(null);
+
+      setErrorAccion(null);
     } catch (e) {
-      console.error(e);
+      mostrarErrorAccion(e, "No se pudo editar la cuota");
     }
   }
 
@@ -868,8 +756,10 @@ export default function ClienteDetalle() {
       setShowEliminarCuotaConfirm(false);
 
       setEditingCuota(null);
+
+      setErrorAccion(null);
     } catch (e) {
-      console.error(e);
+      mostrarErrorAccion(e, "No se pudo eliminar la cuota");
     }
   }
 
@@ -983,20 +873,33 @@ function handleOpenEditarFichero() {
       reloadCliente();
 
       setShowEditClienteModal(false);
+
+      setErrorAccion(null);
     } catch (e) {
-      console.error(e);
+      mostrarErrorAccion(e, "No se pudo guardar el cliente");
     }
   }
 
-  async function handleEliminarCliente() {
-    if (!id) return;
+  async function handleEliminarCliente(forzar = false) {
+    if (!id || eliminandoCliente) return;
+
+    setEliminandoCliente(true);
+
+    setErrorEliminarCliente(null);
 
     try {
-      await deleteCliente(id);
+      await deleteCliente(id, forzar);
 
       navigate("/clientes");
     } catch (e) {
-      console.error(e);
+      const mensaje =
+        e instanceof Error ? e.message : "No se pudo eliminar el cliente";
+
+      setErrorEliminarCliente(mensaje);
+
+      setPuedeForzarEliminar(!forzar && mensaje.includes("forzar"));
+    } finally {
+      setEliminandoCliente(false);
     }
   }
 
@@ -1009,8 +912,10 @@ function handleOpenEditarFichero() {
       reloadCliente();
 
       setShowEliminarFicheroConfirm(false);
+
+      setErrorAccion(null);
     } catch (e) {
-      console.error(e);
+      mostrarErrorAccion(e, "No se pudo eliminar el fichero");
     }
   }
 
@@ -1053,10 +958,19 @@ function handleOpenEditarFichero() {
           { label: "No encontrado" },
         ]}
       >
-        <div className="p-[32px] flex items-center justify-center h-[400px]">
+        <div className="p-[32px] flex flex-col items-center justify-center gap-[12px] h-[400px]">
           <p className="font-['Geist:Regular',sans-serif] text-[#94a3b8] text-[14px]">
-            Cliente no encontrado
+            {errorCarga ?? "Cliente no encontrado"}
           </p>
+
+          {errorCarga && (
+            <button
+              onClick={reloadCliente}
+              className="font-['Geist:Medium',sans-serif] font-medium text-[13px] text-[#b91c1c] px-[10px] py-[4px] rounded-[6px] hover:bg-[#fee2e2] transition-colors"
+            >
+              Reintentar
+            </button>
+          )}
         </div>
       </AppLayout>
     );
@@ -1073,6 +987,17 @@ function handleOpenEditarFichero() {
       ]}
     >
       <div className="p-[32px] flex flex-col gap-[24px]">
+        {errorCarga && (
+          <ErrorBanner mensaje={errorCarga} onReintentar={reloadCliente} />
+        )}
+
+        {errorAccion && (
+          <ErrorBanner
+            mensaje={errorAccion}
+            onCerrar={() => setErrorAccion(null)}
+          />
+        )}
+
         {/* Title */}
         <div className="flex items-center gap-[16px]">
           <button
@@ -1149,6 +1074,8 @@ function handleOpenEditarFichero() {
                       <button
                         onClick={() => {
                           setShowFicheroMenu(false);
+                          setErrorEliminarCliente(null);
+                          setPuedeForzarEliminar(false);
                           setShowDeleteClienteConfirm(true);
                         }}
                         className="w-full flex items-center gap-[8px] px-[12px] py-[8px] text-left font-['Geist:Regular',sans-serif] text-[13px] text-[#ef4444] hover:bg-[#fee2e2] transition-colors"
@@ -2511,6 +2438,26 @@ function handleOpenEditarFichero() {
               </div>
               <div>
                 <label className="font-['Geist:Medium',sans-serif] font-medium text-[#475569] text-[13px] mb-[6px] block">
+                  Caja de destino *
+                </label>
+                <select
+                  value={cobroForm.subCaja}
+                  onChange={(e) => setCobroForm((p) => ({ ...p, subCaja: e.target.value }))}
+                  className={cobroInputClass("cobroSubCaja")}
+                  style={{ border: "1px solid #e2e8f0" }}
+                >
+                  {cajas.map((c) => (
+                    <option key={c.id} value={c.nombre}>
+                      {c.nombre}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[#94a3b8] text-[11px] mt-[4px]">
+                  El cobro genera un ingreso en esta caja.
+                </p>
+              </div>
+              <div>
+                <label className="font-['Geist:Medium',sans-serif] font-medium text-[#475569] text-[13px] mb-[6px] block">
                   Nro. Comprobante (opcional)
                 </label>
                 <input
@@ -3132,6 +3079,14 @@ function handleOpenEditarFichero() {
                 <span className="font-semibold">fichero</span>? Se eliminarán también todas las
                 cuotas asociadas. No se puede deshacer.
               </p>
+
+              {errorEliminarCliente && (
+                <div className="rounded-[8px] bg-[#fef2f2] p-[10px]">
+                  <p className="font-['Geist:Regular',sans-serif] text-[#b91c1c] text-[12px]">
+                    {errorEliminarCliente}
+                  </p>
+                </div>
+              )}
             </div>
             <div
               className="flex items-center justify-end gap-[12px] px-[24px] py-[20px]"
@@ -3143,12 +3098,23 @@ function handleOpenEditarFichero() {
               >
                 Cancelar
               </button>
-              <button
-                onClick={handleEliminarCliente}
-                className="font-['Geist:SemiBold',sans-serif] font-semibold text-[14px] text-white bg-[#ef4444] hover:bg-[#dc2626] transition-colors px-[16px] py-[10px] rounded-[8px]"
-              >
-                Eliminar
-              </button>
+              {puedeForzarEliminar ? (
+                <button
+                  onClick={() => handleEliminarCliente(true)}
+                  disabled={eliminandoCliente}
+                  className="font-['Geist:SemiBold',sans-serif] font-semibold text-[14px] text-white bg-[#ef4444] hover:bg-[#dc2626] transition-colors px-[16px] py-[10px] rounded-[8px] disabled:opacity-50"
+                >
+                  {eliminandoCliente ? "Eliminando…" : "Eliminar igual (borra el historial)"}
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleEliminarCliente()}
+                  disabled={eliminandoCliente}
+                  className="font-['Geist:SemiBold',sans-serif] font-semibold text-[14px] text-white bg-[#ef4444] hover:bg-[#dc2626] transition-colors px-[16px] py-[10px] rounded-[8px] disabled:opacity-50"
+                >
+                  {eliminandoCliente ? "Eliminando…" : "Eliminar"}
+                </button>
+              )}
             </div>
           </div>
         </div>

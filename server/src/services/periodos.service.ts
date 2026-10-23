@@ -2,6 +2,7 @@ import { db } from "../db/index.js"
 
 import {
   periodos,
+  periodosDesvios,
   ficheros,
   cuotas,
   movimientos,
@@ -15,11 +16,15 @@ import { eq, and } from "drizzle-orm"
 
 import { calcularResumenCaja } from "../controllers/caja.controller.js"
 
-import { calcularDerivados, parseMonto } from "./fichero.costs.js"
+import { calcularDerivados, ventaEnCentavos } from "./fichero.costs.js"
 
 import { sumarMontosEnARS } from "./moneda.js"
 
-import { claveMes, hoy, parseFecha } from "../utils/fecha.js"
+import { aCentavos, deCentavos } from "./money.js"
+
+import { claveMes, hoy, parseFecha, diasEntre } from "../utils/fecha.js"
+
+import { idUnico } from "../utils/id.js"
 
 /**
  * Congela un mes: guarda una foto de las cifras y bloquea editar lo que la
@@ -72,9 +77,20 @@ function deEsteMes(fecha: string, mes: number, anio: number): boolean {
   return p !== null && p.mes === mes && p.anio === anio
 }
 
-/** Cuotas vencidas a la fecha de hoy, con su atribución a cliente. */
-export function calcularVencidos() {
-  const hoyF = hoy()
+/**
+ * Cuotas vencidas a una fecha de corte, con su atribución a cliente.
+ *
+ * Antes la fecha de corte era SIEMPRE hoy. Con eso, el snapshot de un mes
+ * pasado decía "0 cuotas vencidas" porque ninguna cuota vencía todavía hoy,
+ * cuando al momento del cierre de ese mes algunas ya lo estaban. Un cierre
+ * mensual tiene que responder "¿cuánto estaba vencido al cierre?", no
+ * "¿cuánto está vencido ahora?".
+ *
+ * Por defecto usa hoy (que es lo correcto para el mes en curso y para las
+ * vistas operativas), pero el snapshot le pasa el último día del periodo.
+ */
+export function calcularVencidos(corte: { anio: number; mes: number; dia: number } = hoy()) {
+  const hoyF = corte
 
   const clientePorFichero = new Map(
     db.select().from(ficheros).all().map((f) => [f.id, f.clienteId]),
@@ -86,9 +102,12 @@ export function calcularVencidos() {
 
   let cuotasVencidas = 0
 
-  let montoVencido = 0
+  let montoVencidoC = 0
 
-  const porCliente = new Map<string, { nombre: string; cuotas: number; monto: number }>()
+  const porCliente = new Map<
+    string,
+    { nombre: string; cuotas: number; montoC: number }
+  >()
 
   for (const c of db.select().from(cuotas).all()) {
     if (c.nroCuota <= 0) continue
@@ -101,13 +120,14 @@ export function calcularVencidos() {
 
     if (diasEntre(hoyF, venc) <= 0) continue
 
-    const pendiente = c.montoPlanificado - c.montoPagado
+    const pendienteC =
+      aCentavos(c.montoPlanificado) - aCentavos(c.montoPagado)
 
-    if (pendiente <= 0) continue
+    if (pendienteC <= 0) continue
 
     cuotasVencidas += 1
 
-    montoVencido += pendiente
+    montoVencidoC += pendienteC
 
     const clienteId = clientePorFichero.get(c.ficheroId)
 
@@ -116,34 +136,84 @@ export function calcularVencidos() {
     const actual = porCliente.get(clienteId) ?? {
       nombre: nombresCliente.get(clienteId) ?? "(cliente borrado)",
       cuotas: 0,
-      monto: 0,
+      montoC: 0,
     }
 
     actual.cuotas += 1
 
-    actual.monto += pendiente
+    actual.montoC += pendienteC
 
     porCliente.set(clienteId, actual)
   }
 
   return {
     cuotasVencidas,
-    montoVencido,
+    montoVencido: deCentavos(montoVencidoC),
     porCliente: [...porCliente.entries()]
-      .map(([clienteId, v]) => ({ clienteId, ...v }))
+      .map(([clienteId, v]) => ({
+        clienteId,
+        nombre: v.nombre,
+        cuotas: v.cuotas,
+        monto: deCentavos(v.montoC),
+      }))
       .sort((a, b) => b.monto - a.monto),
   }
 }
 
-function diasEntre(a: { anio: number; mes: number; dia: number }, b: {
-  anio: number
-  mes: number
-  dia: number
-}): number {
-  const fa = Date.UTC(a.anio, a.mes - 1, a.dia)
-  const fb = Date.UTC(b.anio, b.mes - 1, b.dia)
+/**
+ * Anota una escritura que cayo en un periodo cerrado.
+ *
+ * NO bloquea. El cierre congela `movimientos` y `ficheros`; el resto de las
+ * tablas que alimentan el snapshot siguen escribiendo, porque frenar una
+ * compra registrada con atraso bloquearia el trabajo real. Lo que no se
+ * permite es que pase inadvertido: queda registrado y el `preview` del
+ * periodo lo senala.
+ *
+ * Una fecha ilegible no genera desvio: se rechaza antes con 400, porque no se
+ * puede saber a que periodo pertenecio.
+ */
+export function registrarDesvio(params: {
+  fecha: string
+  tabla: string
+  operacion: string
+  entidadId?: string | null
+  detalle?: string | null
+}): void {
+  const p = parseFecha(params.fecha)
 
-  return Math.round((fa - fb) / 86_400_000)
+  if (!p) return
+
+  const periodo = obtenerPeriodo(p.mes, p.anio)
+
+  if (!periodo || periodo.estado !== "cerrado") return
+
+  db.insert(periodosDesvios)
+    .values({
+      id: idUnico("desv"),
+      periodoId: periodo.id,
+      tabla: params.tabla,
+      operacion: params.operacion,
+      entidadId: params.entidadId ?? null,
+      fecha: params.fecha,
+      detalle: params.detalle ?? null,
+      createdAt: new Date(),
+    })
+    .run()
+}
+
+/** Los desvios registrados de un periodo, del mas nuevo al mas viejo. */
+export function desviosDePeriodo(periodoId: string) {
+  return db
+    .select()
+    .from(periodosDesvios)
+    .where(eq(periodosDesvios.periodoId, periodoId))
+    .all()
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+}
+
+/** Cantidad de desvios de un periodo. Para el dashboard. */
+export function contarDesvios(periodoId: string): number {
+  return desviosDePeriodo(periodoId).length
 }
 
 export function calcularSnapshot(mes: number, anio: number): Snapshot {
@@ -163,17 +233,17 @@ export function calcularSnapshot(mes: number, anio: number): Snapshot {
       return p !== null && claveMes(p) === clave
     })
 
-  let ventasTotal = 0
-  let costoPiscina = 0
-  let costoInstalacion = 0
-  let costoEquipoFiltrado = 0
-  let costoManoObra = 0
-  let comision = 0
+  let ventasTotalC = 0
+  let costoPiscinaC = 0
+  let costoInstalacionC = 0
+  let costoEquipoFiltradoC = 0
+  let costoManoObraC = 0
+  let comisionC = 0
 
   for (const f of ficherosDelMes) {
-    const venta = parseMonto(f.total)
+    const ventaC = ventaEnCentavos(f)
 
-    const d = calcularDerivados(venta, {
+    const d = calcularDerivados(deCentavos(ventaC), {
       costoPiscina: f.costoPiscina,
       costoInstalacion: f.costoInstalacion,
       costoEquipoFiltrado: f.costoEquipoFiltrado,
@@ -181,20 +251,23 @@ export function calcularSnapshot(mes: number, anio: number): Snapshot {
       comisionPct: f.comisionPct,
     })
 
-    ventasTotal += venta
-    costoPiscina += f.costoPiscina
-    costoInstalacion += f.costoInstalacion
-    costoEquipoFiltrado += f.costoEquipoFiltrado
-    costoManoObra += d.costoManoObra
-    comision += d.comisionMonto
+    ventasTotalC += ventaC
+    costoPiscinaC += aCentavos(f.costoPiscina)
+    costoInstalacionC += aCentavos(f.costoInstalacion)
+    costoEquipoFiltradoC += aCentavos(f.costoEquipoFiltrado)
+    costoManoObraC += aCentavos(d.costoManoObra)
+    comisionC += aCentavos(d.comisionMonto)
   }
 
-  const totalCostos =
-    costoPiscina +
-    costoInstalacion +
-    costoEquipoFiltrado +
-    costoManoObra +
-    comision
+  const totalCostosC =
+    costoPiscinaC +
+    costoInstalacionC +
+    costoEquipoFiltradoC +
+    costoManoObraC +
+    comisionC
+
+  const ventasTotal = deCentavos(ventasTotalC)
+  const totalCostos = deCentavos(totalCostosC)
 
   // --- Caja ---
 
@@ -278,24 +351,27 @@ export function calcularSnapshot(mes: number, anio: number): Snapshot {
     deEsteMes(c.fecha, mes, anio),
   )
 
-  const cuentasAPagar = comprasDelMes.reduce((acc, c) => {
+  const cuentasAPagarC = comprasDelMes.reduce((acc, c) => {
     const pagado = pagadoPorCompra.get(c.id) ?? 0
 
     void comprasMap.get(c.id)
 
-    return acc + Math.max(0, c.total - pagado)
+    return acc + Math.max(0, aCentavos(c.total) - aCentavos(pagado))
   }, 0)
 
   // --- Cartera y vencimientos ---
 
-  const carteraCheques = db
+  const carteraChequesC = db
     .select()
     .from(cheques)
     .all()
     .filter((c) => c.tipo === "recibido" && c.estado === "En Cartera")
-    .reduce((acc, c) => acc + c.importe, 0)
+    .reduce((acc, c) => acc + aCentavos(c.importe), 0)
 
-  const vencidos = calcularVencidos()
+  // La foto del corte es contra el ULTIMO DIA del periodo, no contra hoy.
+const ultimoDia = new Date(Date.UTC(anio, mes, 0)).getUTCDate()
+
+const vencidos = calcularVencidos({ anio, mes, dia: ultimoDia })
 
   return {
     mes,
@@ -303,19 +379,21 @@ export function calcularSnapshot(mes: number, anio: number): Snapshot {
     generadoEn: new Date().toISOString(),
     ventas: { total: ventasTotal, cantidad: ficherosDelMes.length },
     costes: {
-      costoPiscina,
-      costoInstalacion,
-      costoEquipoFiltrado,
-      costoManoObra,
-      comision,
+      costoPiscina: deCentavos(costoPiscinaC),
+      costoInstalacion: deCentavos(costoInstalacionC),
+      costoEquipoFiltrado: deCentavos(costoEquipoFiltradoC),
+      costoManoObra: deCentavos(costoManoObraC),
+      comision: deCentavos(comisionC),
       total: totalCostos,
     },
     resultado: {
       bruto: ventasTotal,
-      neto: ventasTotal - totalCostos,
+      neto: deCentavos(ventasTotalC - totalCostosC),
       margenPct:
-        ventasTotal > 0
-          ? Math.round(((ventasTotal - totalCostos) / ventasTotal) * 1000) / 10
+        ventasTotalC > 0
+          ? Math.round(
+              ((ventasTotalC - totalCostosC) / ventasTotalC) * 1000,
+            ) / 10
           : 0,
     },
     caja: {
@@ -327,12 +405,12 @@ export function calcularSnapshot(mes: number, anio: number): Snapshot {
     egresosPorCategoria: [...porCategoria.entries()]
       .map(([categoria, v]) => ({
         categoria,
-        total: v.total,
+        total: deCentavos(v.total),
         movimientos: v.n,
       }))
       .sort((a, b) => b.total - a.total),
-    cuentasAPagar,
-    carteraCheques,
+    cuentasAPagar: deCentavos(cuentasAPagarC),
+    carteraCheques: deCentavos(carteraChequesC),
     cuotasVencidas: vencidos.cuotasVencidas,
     montoVencido: vencidos.montoVencido,
     avisos,
@@ -366,15 +444,51 @@ export class MesCerradoError extends Error {
 }
 
 /**
- * Lanza si la fecha cae en un mes cerrado. La usan los controladores de
- * movimientos y ficheros antes de crear, editar o borrar.
+ * Error de fecha ilegible.
+ *
+ * Antes `assertMesAbierto` hacia `return` en silencio cuando la fecha no se
+ * podia parsear, y eso abria el guard entero: mandar
+ * `fecha: "no-es-una-fecha"` en un mes cerrado pasaba limpio. Una fecha que no
+ * se entiende no puede verificarse contra el periodo, asi que hay que
+ * rechazarla.
+ */
+export class FechaInvalidaError extends Error {
+  constructor(fecha: unknown) {
+    super(`La fecha "${String(fecha)}" no es válida. Se espera el formato yyyy-mm-dd.`)
+
+    this.name = "FechaInvalidaError"
+  }
+}
+
+/**
+ * Lanza si la fecha cae en un mes cerrado, o si la fecha misma no es válida.
+ *
+ * Se usa antes de crear, editar o borrar. Throw, no retorno: el flujo tiene que
+ * detenerse.
  */
 export function assertMesAbierto(fecha: string): void {
   const p = parseFecha(fecha)
 
-  if (!p) return
+  if (!p) throw new FechaInvalidaError(fecha)
 
   if (mesCerrado(p.mes, p.anio)) {
     throw new MesCerradoError(p.mes, p.anio)
+  }
+}
+
+/**
+ * Igual que `assertMesAbierto`, pero devuelve el error en vez de tirar, para
+ * los endpoints que escriben en tablas que el periodo no congela (stock,
+ * remitos, compras, cuotas...). Esos no se bloquean: se anotan como desvio.
+ */
+export function chequearMesAbierto(
+  fecha: string,
+): { ok: true } | { ok: false; error: Error } {
+  try {
+    assertMesAbierto(fecha)
+
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e as Error }
   }
 }

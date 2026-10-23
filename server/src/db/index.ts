@@ -26,9 +26,41 @@ sqlite.pragma("journal_mode = WAL")
 
 sqlite.pragma("foreign_keys = ON")
 
+// better-sqlite3 lanza SQLITE_BUSY al instante en vez de esperar. Sin esto,
+// el server de desarrollo (3001), el de pruebas (3002) y un script de
+// migracion abiertos sobre el mismo archivo se pisan entre si.
+sqlite.pragma("busy_timeout = 5000")
+
 export const db = drizzle(sqlite, { schema })
 
 export { sqlite }
+
+// Una base que ya existia antes de este codigo tiene los montos en pesos. Si
+// no esta marcada como migrada, arrancar la app guardaria centavos en columnas
+// con pesos viejos y romperia todas las cuentas en silencio. Mejor no arrancar.
+
+const baseExistente = Boolean(
+  sqlite
+    .prepare(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'clientes'",
+    )
+    .get(),
+)
+
+sqlite.exec(
+  "CREATE TABLE IF NOT EXISTS _migraciones (nombre TEXT PRIMARY KEY, aplicada_en TEXT NOT NULL)",
+)
+
+const migracionCentavos = sqlite
+  .prepare("SELECT nombre FROM _migraciones WHERE nombre = 'centavos_v1'")
+  .get()
+
+if (baseExistente && !migracionCentavos) {
+  throw new Error(
+    `La base ${dbPath} todavia tiene los montos en pesos. ` +
+      "Detene el server y ejecuta `node scripts/migrar-centavos.mjs` en server/.",
+  )
+}
 
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS clientes (
@@ -56,6 +88,7 @@ sqlite.exec(`
     comision TEXT,
     items TEXT NOT NULL DEFAULT '[]',
     total TEXT NOT NULL DEFAULT '$0',
+    total_centavos INTEGER,
     costo_piscina INTEGER NOT NULL DEFAULT 0,
     costo_instalacion INTEGER NOT NULL DEFAULT 0,
     costo_equipo_filtrado INTEGER NOT NULL DEFAULT 0,
@@ -105,7 +138,7 @@ sqlite.exec(`
     tipo TEXT NOT NULL,
     sub_caja TEXT NOT NULL,
     moneda TEXT NOT NULL DEFAULT 'ARS',
-    tipo_cambio INTEGER,
+    tipo_cambio REAL,
     categoria TEXT,
     comprobante TEXT,
     observaciones TEXT,
@@ -141,6 +174,30 @@ sqlite.exec(`
 
   CREATE UNIQUE INDEX IF NOT EXISTS periodos_mes_anio_uq
     ON periodos (mes, anio);
+
+  -- Escrituras que cayeron en un periodo cerrado.
+  --
+  -- Decision de producto: el cierre de mes congela SOLO movimientos y
+  -- ficheros (donde esta assertMesAbierto). Compras, remitos, stock,
+  -- cuotas, cheques y ordenes de pago siguen admitiendo escrituras, porque
+  -- frenar una compra que se registra con atraso bloquearia el trabajo real.
+  --
+  -- Lo que no se permite es que eso pase inadvertido: cada escritura en un
+  -- periodo cerrado se anota aca, y Finanzas puede ver que el snapshot ya no
+  -- describe la realidad.
+  CREATE TABLE IF NOT EXISTS periodos_desvios (
+    id TEXT PRIMARY KEY,
+    periodo_id TEXT NOT NULL,
+    tabla TEXT NOT NULL,
+    operacion TEXT NOT NULL,
+    entidad_id TEXT,
+    fecha TEXT NOT NULL,
+    detalle TEXT,
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS periodos_desvios_periodo
+    ON periodos_desvios (periodo_id);
 
   CREATE TABLE IF NOT EXISTS categorias (
     id TEXT PRIMARY KEY,
@@ -231,7 +288,7 @@ sqlite.exec(`
     fecha TEXT NOT NULL,
     descripcion TEXT,
     moneda TEXT NOT NULL DEFAULT 'ARS',
-    tipo_cambio INTEGER,
+    tipo_cambio REAL,
     total INTEGER NOT NULL DEFAULT 0,
     items TEXT NOT NULL DEFAULT '[]',
     estado TEXT NOT NULL DEFAULT 'Pendiente',
@@ -333,6 +390,27 @@ sqlite.exec(`
     referencia_id TEXT,
     created_at INTEGER NOT NULL
   );
+
+  -- Backstops de unicidad.
+  --
+  -- Los controllers chequean duplicados en código, pero eso es "leer y
+  -- comparar": dos pedidos simultáneos pasan los dos y el segundo rompe algo.
+  -- estos índices son la red de seguridad. El cálculo de numero (max+1) queda
+  -- fuera de transaccion, así que sin indice la numeración puede repetirse.
+  --
+  -- articulos.codigo y cajas.nombre son índices PARCIALES: null no
+  -- compite con null, asi que varios artículos sin código conviven.
+  CREATE UNIQUE INDEX IF NOT EXISTS remitos_numero_uq
+    ON remitos (numero);
+  CREATE UNIQUE INDEX IF NOT EXISTS ordenes_pago_numero_uq
+    ON ordenes_pago (numero);
+  CREATE UNIQUE INDEX IF NOT EXISTS cuotas_fichero_nro_uq
+    ON cuotas (fichero_id, nro_cuota);
+  CREATE UNIQUE INDEX IF NOT EXISTS cajas_nombre_uq
+    ON cajas (nombre);
+  CREATE UNIQUE INDEX IF NOT EXISTS articulos_codigo_uq
+    ON articulos (codigo)
+    WHERE codigo IS NOT NULL;
 `)
 
 // Migration: add pago a proveedor columns to cheques if missing
@@ -355,6 +433,10 @@ function agregarColumnaSiFalta(
 // instalaciones previas al fix del bootstrap, asi que se aggregan aca.
 
 agregarColumnaSiFalta("ficheros", "pago_inicial", "INTEGER NOT NULL DEFAULT 0")
+
+// Espejo en centavos del total formateado. Lo agrega el script de migracion
+// sobre bases viejas; en una base nueva nace con la tabla.
+agregarColumnaSiFalta("ficheros", "total_centavos", "INTEGER")
 
 // Costes normalizados: antes vivian dentro del JSON `costos` como strings.
 // Si las columnas no existen las agrega; el volcado de datos a estas columnas
@@ -401,7 +483,10 @@ const cajasCount = sqlite
   .get() as { count: number }
 
 if (cajasCount.count === 0) {
-  const now = Date.now()
+  // Drizzle declara created_at con mode "timestamp" (segundos). Guardar
+  // Date.now() (milisegundos) hacia que al leerlo se multiplicara por 1000:
+  // createdAt caia en el anio 58754.
+  const now = Math.floor(Date.now() / 1000)
 
   const insertCaja = sqlite.prepare(
     "INSERT INTO cajas (id, nombre, color, orden, activa, afecta_general, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -450,11 +535,20 @@ const CATEGORIAS_INICIALES: [string, string, string][] = [
     "INSERT OR IGNORE INTO categorias (id, nombre, tipo, activa, color, orden, created_at) VALUES (?, ?, ?, 1, ?, ?, ?)",
   )
 
-  const now = Date.now()
+  const now = Math.floor(Date.now() / 1000)
 
   CATEGORIAS_INICIALES.forEach(([nombre, tipo, color], i) => {
     insertCat.run(`cat_${nombre.toLowerCase().replace(/[^a-z0-9]+/g, "_")}`, nombre, tipo, color, i, now)
   })
+}
+
+{
+  // Repara las filas que sembraron versiones anteriores con milisegundos.
+  // 4_102_444_800 es el 2100-01-01 en segundos: cualquier valor mayor esta en ms.
+  sqlite.exec(`
+    UPDATE cajas SET created_at = created_at / 1000 WHERE created_at > 4102444800;
+    UPDATE categorias SET created_at = created_at / 1000 WHERE created_at > 4102444800;
+  `)
 }
 
 // Migration: add afecta_general column if missing
@@ -497,4 +591,16 @@ try {
   sqlite.exec(
     "ALTER TABLE compras ADD COLUMN recepciones TEXT NOT NULL DEFAULT '[]'",
   )
+}
+
+// Una base nueva ya nace con el esquema en centavos; las viejas solo llegan
+// aca despues de correr scripts/migrar-centavos.mjs (si no, el guard de arriba
+// corta el arranque).
+
+if (!migracionCentavos) {
+  sqlite
+    .prepare(
+      "INSERT OR IGNORE INTO _migraciones (nombre, aplicada_en) VALUES (?, ?)",
+    )
+    .run("centavos_v1", new Date().toISOString())
 }

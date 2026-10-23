@@ -8,9 +8,10 @@ import { instalaciones, ficheros, clientes, equipos } from "../db/schema.js"
 
 import { eq, and, gte, lte, desc } from "drizzle-orm"
 
+import { FECHA_REGEX } from "../utils/fecha.js"
+
 const ESTADOS = ["Pendiente", "Confirmada", "En Proceso", "Completada"]
 
-const FECHA_REGEX = /^\d{4}-\d{2}-\d{2}$/
 
 function validarFecha(fecha: unknown): string | null {
   if (fecha === undefined || fecha === null || String(fecha) === "")

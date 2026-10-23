@@ -5,7 +5,6 @@ import * as controller from "../controllers/categorias.controller.js"
 const router = Router()
 
 router.get("/", controller.getAll)
-router.get("/usadas", controller.getUsadas)
 router.post("/", controller.create)
 router.put("/:id", controller.update)
 router.delete("/:id", controller.remove)

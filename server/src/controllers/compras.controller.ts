@@ -11,8 +11,17 @@ import {
   hoy,
 } from "../services/stock.service.js"
 
+import { FECHA_REGEX } from "../utils/fecha.js"
+
+import { registrarDesvio } from "../services/periodos.service.js"
+
+import {
+  aCentavos,
+  deCentavos,
+  redondearTipoCambio,
+} from "../services/money.js"
+
 export const ESTADOS_COMPRA = ["Pendiente", "En Tránsito", "Recibido"]
-const FECHA_REGEX = /^\d{4}-\d{2}-\d{2}$/
 
 export interface ItemCompra {
   detalle: string
@@ -25,7 +34,7 @@ function calcularTotal(items: unknown): { total: number; error: string | null } 
     return { total: 0, error: "Debe indicar al menos un item de la compra" }
   }
 
-  let total = 0
+  let totalC = 0
   for (const item of items as Partial<ItemCompra>[]) {
     const cantidad = Number(item?.cantidad)
     const precioUnitario = Number(item?.precioUnitario)
@@ -38,9 +47,9 @@ function calcularTotal(items: unknown): { total: number; error: string | null } 
         error: "El precio unitario de cada item no puede ser negativo",
       }
     }
-    total += cantidad * precioUnitario
+    totalC += Math.round(aCentavos(precioUnitario) * cantidad)
   }
-  return { total: Math.round(total), error: null }
+  return { total: deCentavos(totalC), error: null }
 }
 
 function parseJson<T>(raw: unknown, fallback: T): T {
@@ -155,7 +164,7 @@ export function create(req: Request, res: Response) {
       fecha: String(fecha),
       descripcion: descripcion ? String(descripcion).trim() : null,
       moneda: monedaFinal,
-      tipoCambio: tipoCambio ? Math.round(Number(tipoCambio)) : null,
+      tipoCambio: redondearTipoCambio(tipoCambio),
       total,
       items: JSON.stringify(limpiarItems(items)),
       estado: estadoFinal,
@@ -239,7 +248,7 @@ export function update(req: Request, res: Response) {
             : "ARS",
       }),
       ...(tipoCambio !== undefined && {
-        tipoCambio: tipoCambio ? Math.round(Number(tipoCambio)) : null,
+        tipoCambio: redondearTipoCambio(tipoCambio),
       }),
       ...(items !== undefined && { total, items: itemsStr }),
       ...(estado !== undefined && { estado }),
@@ -308,7 +317,7 @@ export function contarPagos(compraId: string): number {
     .from(ordenesPago)
     .where(eq(ordenesPago.estado, "Pagada"))
     .all()
-  let total = 0
+  let totalC = 0
   for (const o of ordenes) {
     try {
       const links = JSON.parse(o.comprasPagadas || "[]") as {
@@ -316,12 +325,12 @@ export function contarPagos(compraId: string): number {
         monto: number
       }[]
       for (const l of links)
-        if (l.compraId === compraId) total += Number(l.monto || 0)
+        if (l.compraId === compraId) totalC += aCentavos(l.monto)
     } catch {
       // ignorar JSON inválido
     }
   }
-  return total
+  return deCentavos(totalC)
 }
 
 export function saldoCompras(
@@ -466,6 +475,14 @@ export function createRecepcion(req: Request, res: Response) {
     return
   }
 
+  registrarDesvio({
+    fecha: fechaFinal,
+    tabla: "compras",
+    operacion: "recepcion",
+    entidadId: existing.id,
+    detalle: `${lineas.length} línea(s)`,
+  })
+
   const normalizadas: {
     itemIndex: number
     articuloId: string
@@ -473,6 +490,16 @@ export function createRecepcion(req: Request, res: Response) {
     cantidad: number
     precioUnitario: number
   }[] = []
+
+  /**
+   * `pendientes` es un snapshot del estado al inicio del request. Si dos
+   * lineas del mismo request apuntan al mismo item, ambas comparaban contra el
+   * MISMO pendiente y las dos pasaban: pedir 3 + 3 de algo que solo tenia 5
+   * pendientes inflaba el stock en 1 unidad.
+   *
+   * Se descuenta en memoria segun se avanza.
+   */
+  const restantePorItem = new Map<number, number>()
 
   for (const [i, raw] of (lineas as LineaRecepcionBody[]).entries()) {
     const linea = raw ?? {}
@@ -482,6 +509,10 @@ export function createRecepcion(req: Request, res: Response) {
       res.status(400).json({ error: `Línea ${i + 1}: item de compra inválido` })
       return
     }
+
+    const yaPedidoEnEsteRequest = restantePorItem.get(index) ?? 0
+
+    const disponible = pendiente.pendiente - yaPedidoEnEsteRequest
 
     const articulo = linea.articuloId
       ? db.select().from(articulos).where(eq(articulos.id, String(linea.articuloId))).get()
@@ -498,12 +529,16 @@ export function createRecepcion(req: Request, res: Response) {
         .json({ error: `Línea ${i + 1}: la cantidad debe ser mayor a cero` })
       return
     }
-    if (cantidad > pendiente.pendiente) {
+    if (cantidad > disponible) {
       res.status(400).json({
-        error: `Línea ${i + 1}: sólo quedan ${pendiente.pendiente} pendiente(s) de "${pendiente.detalle || "item"}"`,
+        error:
+          `Línea ${i + 1}: sólo quedan ${disponible} pendiente(s) de ` +
+          `"${pendiente.detalle || "item"}"`,
       })
       return
     }
+
+    restantePorItem.set(index, yaPedidoEnEsteRequest + cantidad)
 
     normalizadas.push({
       itemIndex: index,
@@ -543,9 +578,11 @@ export function createRecepcion(req: Request, res: Response) {
         .where(eq(articulos.id, linea.articuloId))
         .get()
 
-      if (art && art.costoUnitario !== Math.round(linea.precioUnitario)) {
+      const costoC = aCentavos(linea.precioUnitario)
+
+      if (art && aCentavos(art.costoUnitario) !== costoC) {
         tx.update(articulos)
-          .set({ costoUnitario: Math.round(linea.precioUnitario) })
+          .set({ costoUnitario: deCentavos(costoC) })
           .where(eq(articulos.id, linea.articuloId))
           .run()
 
@@ -553,7 +590,7 @@ export function createRecepcion(req: Request, res: Response) {
           .values({
             id: idUnico("hct"),
             articuloId: linea.articuloId,
-            costo: Math.round(linea.precioUnitario),
+            costo: deCentavos(costoC),
             fecha: fechaFinal,
             origen: "compra",
             referenciaId: existing.id,

@@ -7,6 +7,8 @@ import {
   type CompraInput,
   type CompraItem,
 } from "@/services/api";
+import { parseArray } from "@/utils/json";
+import ErrorBanner from "@/components/ErrorBanner";
 
 const ESTADOS: CompraEstado[] = ["Pendiente", "En Tránsito", "Recibido"];
 
@@ -37,13 +39,7 @@ function hoy(): string {
 }
 
 function parseItems(raw: Compra["items"]): CompraItem[] {
-  if (Array.isArray(raw)) return raw;
-  try {
-    const parsed = JSON.parse(String(raw));
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  return parseArray<CompraItem>(raw);
 }
 
 export default function CompraFormModal({ proveedorId, compra, monedas, onClose, onSaved }: Props) {
@@ -59,6 +55,7 @@ export default function CompraFormModal({ proveedorId, compra, monedas, onClose,
     itemsIniciales.length > 0 ? itemsIniciales : [{ detalle: "", cantidad: 1, precioUnitario: 0 }],
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [apiError, setApiError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const editando = Boolean(compra);
@@ -109,6 +106,7 @@ export default function CompraFormModal({ proveedorId, compra, monedas, onClose,
   async function handleGuardar() {
     if (!validate()) return;
     setSaving(true);
+    setApiError(null);
     try {
       const data: CompraInput = {
         fecha: form.fecha,
@@ -126,7 +124,9 @@ export default function CompraFormModal({ proveedorId, compra, monedas, onClose,
       else await createCompra(proveedorId, data);
       onSaved();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Error al guardar la compra");
+      setApiError(
+        err instanceof Error ? err.message : "Error al guardar la compra",
+      );
     } finally {
       setSaving(false);
     }
@@ -162,6 +162,12 @@ export default function CompraFormModal({ proveedorId, compra, monedas, onClose,
         </div>
 
         <div className="px-[24px] py-[20px] flex flex-col gap-[16px]">
+          {apiError && (
+            <ErrorBanner
+              mensaje={apiError}
+              onCerrar={() => setApiError(null)}
+            />
+          )}
           <div className="grid grid-cols-3 gap-[12px]">
             <div>
               <label className={labelClass}>Fecha *</label>

@@ -8,12 +8,8 @@ import {
   type DashboardCheque,
   type DashboardMoroso,
 } from "@/services/api";
-import {
-  formatDias,
-  formatFecha,
-  formatMonto,
-  formatMontoCorto,
-} from "@/utils/format";
+import { formatDias, formatFecha } from "@/utils/fecha";
+import { formatMonto, formatMontoCorto } from "@/utils/money";
 
 function IconVentas() {
   return (

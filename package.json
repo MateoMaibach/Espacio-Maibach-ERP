@@ -9,7 +9,9 @@
     "setup": "npm install && npm --prefix server install",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "format": "oxfmt ."
+    "format": "oxfmt .",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "react": "^19.0.0",
@@ -18,13 +20,17 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.0",
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/react": "^16.3.3",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^6.0.0",
+    "jsdom": "^29.1.1",
     "oxfmt": "^0.70.0",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.7.0",
-    "vite": "^8.0.5"
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
   }
 }

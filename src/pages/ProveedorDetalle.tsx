@@ -17,6 +17,10 @@ import ProveedorFormModal from "@/components/ProveedorFormModal";
 import CompraFormModal from "@/components/CompraFormModal";
 import OrdenPagoModal from "@/components/OrdenPagoModal";
 import RecepcionCompraModal from "@/components/RecepcionCompraModal";
+import ErrorBanner from "@/components/ErrorBanner";
+import { formatFecha } from "@/utils/fecha";
+import { parseArray } from "@/utils/json";
+import { formatMonto } from "@/utils/money";
 
 const estadoStyle: Record<string, { bg: string; color: string }> = {
   Activo: { bg: "#d1fae5", color: "#10b981" },
@@ -37,28 +41,10 @@ const ingresoEstadoStyle: Record<string, { bg: string; color: string }> = {
   Pendiente: { bg: "#f1f5f9", color: "#64748b" },
 };
 
-function formatMonto(value: number, moneda: string): string {
-  if (moneda === "ARS") return `$${value.toLocaleString("es-AR")}`;
-  return `${moneda} ${value.toLocaleString("es-AR")}`;
-}
-
-function formatFecha(iso: string): string {
-  if (!iso) return "—";
-  const [a, m, d] = iso.split("-");
-  if (!a || !m || !d) return iso;
-  return `${d}/${m}/${a}`;
-}
-
-function parseItems(
-  raw: Compra["items"],
-): { detalle?: string; cantidad?: number; precioUnitario?: number }[] {
-  if (Array.isArray(raw)) return raw;
-  try {
-    const parsed = JSON.parse(String(raw));
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+function parseItems(raw: Compra["items"]) {
+  return parseArray<{ detalle?: string; cantidad?: number; precioUnitario?: number }>(
+    raw,
+  );
 }
 
 export default function ProveedorDetalle() {
@@ -70,6 +56,7 @@ export default function ProveedorDetalle() {
   const [ordenes, setOrdenes] = useState<OrdenPago[]>([]);
   const [monedas, setMonedas] = useState<string[]>(["ARS"]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [noExiste, setNoExiste] = useState(false);
 
   const [showEdit, setShowEdit] = useState(false);
@@ -95,9 +82,13 @@ export default function ProveedorDetalle() {
       setCompras(comps);
       setOrdenes(ords);
       setMonedas(mons.length > 0 ? mons : ["ARS"]);
+      setError(null);
     } catch (err) {
       if (err instanceof Error && /no encontrado|Error 404/i.test(err.message)) setNoExiste(true);
-      else alert(err instanceof Error ? err.message : "Error al cargar el proveedor");
+      else
+        setError(
+          err instanceof Error ? err.message : "Error al cargar el proveedor",
+        );
     } finally {
       setLoading(false);
     }
@@ -130,7 +121,9 @@ export default function ProveedorDetalle() {
       await deleteProveedor(proveedor.id);
       navigate("/proveedores");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Error al eliminar el proveedor");
+      setError(
+        err instanceof Error ? err.message : "Error al eliminar el proveedor",
+      );
       setShowDelete(false);
     }
   }
@@ -142,7 +135,10 @@ export default function ProveedorDetalle() {
       setAnulandoOrden(null);
       cargar();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Error al anular la orden de pago");
+      setError(
+        err instanceof Error ? err.message : "Error al anular la orden de pago",
+      );
+      setAnulandoOrden(null);
     }
   }
 
@@ -153,7 +149,10 @@ export default function ProveedorDetalle() {
       setDeletingCompra(null);
       cargar();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Error al eliminar la compra");
+      setError(
+        err instanceof Error ? err.message : "Error al eliminar la compra",
+      );
+      setDeletingCompra(null);
     }
   }
 
@@ -180,7 +179,7 @@ export default function ProveedorDetalle() {
     );
   }
 
-  if (loading || !proveedor) {
+  if (loading) {
     return (
       <AppLayout
         breadcrumbs={[
@@ -190,6 +189,30 @@ export default function ProveedorDetalle() {
       >
         <div className="p-[32px] font-['Geist:Regular',sans-serif] text-[#94a3b8] text-[14px]">
           Cargando proveedor...
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (!proveedor) {
+    return (
+      <AppLayout
+        breadcrumbs={[
+          { label: "Proveedores", onClick: () => navigate("/proveedores") },
+          { label: "Error" },
+        ]}
+      >
+        <div className="p-[32px] flex flex-col items-start gap-[16px]">
+          <ErrorBanner
+            mensaje={error ?? "No se pudo cargar el proveedor"}
+            onReintentar={cargar}
+          />
+          <button
+            onClick={() => navigate("/proveedores")}
+            className="text-[#0ea5e9] text-[14px] font-medium"
+          >
+            Volver a Proveedores
+          </button>
         </div>
       </AppLayout>
     );
@@ -218,6 +241,14 @@ export default function ProveedorDetalle() {
       ]}
     >
       <div className="p-[32px] flex flex-col gap-[24px]">
+        {error && (
+          <ErrorBanner
+            mensaje={error}
+            onReintentar={cargar}
+            onCerrar={() => setError(null)}
+          />
+        )}
+
         {/* Title */}
         <div className="flex items-center gap-[16px]">
           <button

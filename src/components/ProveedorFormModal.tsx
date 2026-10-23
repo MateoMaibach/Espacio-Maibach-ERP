@@ -1,4 +1,5 @@
 import { useState } from "react";
+import ErrorBanner from "@/components/ErrorBanner";
 import {
   createProveedor,
   updateProveedor,
@@ -70,6 +71,7 @@ const baseInput =
 export default function ProveedorFormModal({ proveedor, onClose, onSaved }: Props) {
   const [form, setForm] = useState<FormState>(proveedor ? desdeProveedor(proveedor) : vacio);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [apiError, setApiError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const editando = Boolean(proveedor);
@@ -89,6 +91,7 @@ export default function ProveedorFormModal({ proveedor, onClose, onSaved }: Prop
   async function handleGuardar() {
     if (!validate()) return;
     setSaving(true);
+    setApiError(null);
     try {
       const data: ProveedorInput = {
         razonSocial: form.razonSocial.trim(),
@@ -108,7 +111,9 @@ export default function ProveedorFormModal({ proveedor, onClose, onSaved }: Prop
       else await createProveedor(data);
       onSaved();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Error al guardar el proveedor");
+      setApiError(
+        err instanceof Error ? err.message : "Error al guardar el proveedor",
+      );
     } finally {
       setSaving(false);
     }
@@ -147,6 +152,12 @@ export default function ProveedorFormModal({ proveedor, onClose, onSaved }: Prop
         </div>
 
         <div className="px-[24px] py-[20px] flex flex-col gap-[16px]">
+          {apiError && (
+            <ErrorBanner
+              mensaje={apiError}
+              onCerrar={() => setApiError(null)}
+            />
+          )}
           <div>
             <label className={labelClass}>Razón social *</label>
             <input

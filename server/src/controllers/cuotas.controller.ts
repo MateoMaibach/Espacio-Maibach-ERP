@@ -4,9 +4,26 @@ import { idUnico } from "../utils/id.js"
 
 import { db } from "../db/index.js"
 
-import { ficheros, cuotas, clientes } from "../db/schema.js"
+import {
+  ficheros,
+  cuotas,
+  clientes,
+  cajas,
+  movimientos,
+} from "../db/schema.js"
 
 import { eq, and } from "drizzle-orm"
+
+import { assertMesAbierto, registrarDesvio } from "../services/periodos.service.js"
+
+import { FECHA_REGEX, hoyISO, parseFecha } from "../utils/fecha.js"
+
+import { ventaEnCentavos } from "../services/fichero.costs.js"
+
+import { aCentavos, deCentavos } from "../services/money.js"
+
+/** Categoria de ingresos donde cae el cobro de cuotas. */
+const CATEGORIA_COBRO_CUOTA = "Cobro cuota"
 
 function getFicheroByClienteId(clienteId: string) {
   return db
@@ -35,10 +52,6 @@ function getCuotaDeCliente(clienteId: string, cuotaId: string) {
   if (!fichero || fichero.clienteId !== clienteId) return undefined
 
   return cuota
-}
-
-function parseCurrency(value: string): number {
-  return parseInt(value.replace(/[^0-9]/g, ""), 10) || 0
 }
 
 function getCurrentDateStr(): string {
@@ -85,11 +98,15 @@ export function registrarPagoInicial(req: Request, res: Response) {
 
   const { monto, metodo, comprobante, observaciones } = req.body
 
-  if (!monto || monto <= 0) {
+  const montoC = aCentavos(monto)
+
+  if (montoC <= 0) {
     res.status(400).json({ error: "Monto obligatorio mayor a 0" })
 
     return
   }
+
+  const montoFinal = deCentavos(montoC)
 
   const existing = db
     .select()
@@ -100,9 +117,9 @@ export function registrarPagoInicial(req: Request, res: Response) {
   if (existing) {
     db.update(cuotas)
       .set({
-        montoPlanificado: monto,
+        montoPlanificado: montoFinal,
 
-        montoPagado: monto,
+        montoPagado: montoFinal,
 
         estado: "Pagada",
 
@@ -127,9 +144,9 @@ export function registrarPagoInicial(req: Request, res: Response) {
 
         fechaVencimiento: getCurrentDateStr(),
 
-        montoPlanificado: monto,
+        montoPlanificado: montoFinal,
 
-        montoPagado: monto,
+        montoPagado: montoFinal,
 
         estado: "Pagada",
 
@@ -149,7 +166,7 @@ export function registrarPagoInicial(req: Request, res: Response) {
   }
 
   db.update(ficheros)
-    .set({ pagoInicial: monto })
+    .set({ pagoInicial: montoFinal })
     .where(eq(ficheros.id, fichero.id))
     .run()
 
@@ -179,15 +196,36 @@ export function generarPlan(req: Request, res: Response) {
 
   const { cantCuotas, fechaPrimerVto } = req.body
 
-  const total = parseCurrency(fichero.total)
+  const totalC = ventaEnCentavos(fichero)
 
-  const pagoInicial = fichero.pagoInicial || 0
+  const pagoInicialC = aCentavos(fichero.pagoInicial)
 
-  const saldo = total - pagoInicial
+  const saldoC = totalC - pagoInicialC
 
-  const n = cantCuotas || fichero.cantCuotas || 1
+  const nCrudo = cantCuotas ?? fichero.cantCuotas ?? 1
 
-  if (saldo <= 0) {
+  // Sin esto, cantCuotas: -5 creaba 0 cuotas pero guardaba cantCuotas = -5 en
+  // el fichero y respondia cuotasGeneradas: -5. Y un 3.5 generaba 4 cuotas
+  // (for i < 3.5) sin aplicar nunca el remanente.
+  const n = Math.trunc(Number(nCrudo))
+
+  if (!Number.isFinite(n) || n < 1) {
+    res
+      .status(400)
+      .json({ error: "La cantidad de cuotas debe ser un numero entero mayor a 0" })
+
+    return
+  }
+
+  if (n > 120) {
+    res
+      .status(400)
+      .json({ error: "La cantidad de cuotas no puede superar 120" })
+
+    return
+  }
+
+  if (saldoC <= 0) {
     res
       .status(400)
       .json({
@@ -198,57 +236,41 @@ export function generarPlan(req: Request, res: Response) {
     return
   }
 
-  // TODO(calculos): generarPlan ignora el mes que viene en fechaPrimerVto.
-  // El front manda dd/mm/aaaa (ClienteDetalle.tsx) pero este parser espera
-  // "10 Oct, 2026", asi que monthsMap["10"] da undefined y cae al mes actual.
-  // Ademas la linea de abajo fija el dia en 1. Corregirlo cambia los
-  // vencimientos que ve el usuario: revisar con el equipo antes de tocar.
+  /**
+ * `fechaPrimerVto` lo manda el front como `dd/mm/aaaa`
+ * (`getCurrentDate` en clienteDetalleData.ts), pero este parser esperaba
+ * `"10 Oct, 2026"`: dividia el string y buscaba `parts[1]` en un mapa de
+ * nombres de mes. Con `"14/10/2026"` daba `"10"`, que no existe en el mapa,
+ * asi que caia al mes actual Y al dia 1.
+ *
+ * O sea: el usuario elegia una fecha y el sistema usaba otra.
+ *
+ * `parseFecha` ya entiende los dos formatos, asi que se usa ese.
+ */
+const MESES_CORTOS = [
+  "Ene",
+  "Feb",
+  "Mar",
+  "Abr",
+  "May",
+  "Jun",
+  "Jul",
+  "Ago",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dic",
+]
 
-  const monthsMap: Record<string, number> = {
-    Ene: 0,
-    Feb: 1,
-    Mar: 2,
-    Abr: 3,
-    May: 4,
-    Jun: 5,
-    Jul: 6,
-    Ago: 7,
-    Sep: 8,
-    Oct: 9,
-    Nov: 10,
-    Dic: 11,
-  }
+const now = new Date()
 
-  const monthsArr = [
-    "Ene",
-    "Feb",
-    "Mar",
-    "Abr",
-    "May",
-    "Jun",
-    "Jul",
-    "Ago",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dic",
-  ]
+const dateStr = fechaPrimerVto || getCurrentDateStr()
 
-  const now = new Date()
+const primera = parseFecha(dateStr)
 
-  const dateStr = fechaPrimerVto || getCurrentDateStr()
-
-  const parts = dateStr.replace(/,/g, "").split(/[\s\/]/)
-
-  let startMonth = now.getMonth()
-
-  let startYear = now.getFullYear()
-
-  if (parts.length >= 3) {
-    startMonth = monthsMap[parts[1] ?? ""] ?? now.getMonth()
-
-    startYear = parseInt(parts[2] ?? "", 10) || now.getFullYear()
-  }
+const startDia = primera?.dia ?? 1
+const startMonth = (primera?.mes ?? now.getMonth() + 1) - 1
+const startYear = primera?.anio ?? now.getFullYear()
 
   const existingCuotas = db
     .select()
@@ -256,54 +278,84 @@ export function generarPlan(req: Request, res: Response) {
     .where(eq(cuotas.ficheroId, fichero.id))
     .all()
 
-  for (const cuota of existingCuotas) {
-    if (cuota.nroCuota > 0) {
-      db.delete(cuotas).where(eq(cuotas.id, cuota.id)).run()
+  /**
+   * Regenerar el plan borra las cuotas existentes. Si alguna ya tiene plata
+   * cobrada, eso es plata que se pierde: no queda ni registro ni saldo.
+   *
+   * Antes de existir este chequeo, regenerar desde la UI borraba en silencio
+   * todo el historial de cobros de un fichero.
+   */
+  const cuotasCobradas = existingCuotas.filter(
+    c => c.nroCuota > 0 && (c.montoPagado ?? 0) > 0,
+  )
+
+  if (cuotasCobradas.length > 0) {
+    const cobradoC = cuotasCobradas.reduce(
+      (a, c) => a + aCentavos(c.montoPagado),
+      0,
+    )
+
+    res.status(409).json({
+      error:
+        `No se puede regenerar el plan: ya hay ${cuotasCobradas.length} cuota(s) cobradas ` +
+        `($${deCentavos(cobradoC).toLocaleString("es-AR")}). Editá el importe de las cuotas existentes, ` +
+        `o corregí los cobros antes de volver a generar el plan.`,
+    })
+
+    return
+  }
+
+  const montoPorCuotaC = Math.floor(saldoC / n)
+
+  const montoUltimaC = saldoC - montoPorCuotaC * (n - 1)
+
+  // Borrar e insertar tiene que ser una sola operacion: si fallara en el
+  // medio, el fichero se quedaria sin ninguna cuota.
+  db.transaction(tx => {
+    for (const cuota of existingCuotas) {
+      if (cuota.nroCuota > 0) {
+        tx.delete(cuotas).where(eq(cuotas.id, cuota.id)).run()
+      }
     }
-  }
 
-  const montoPorCuota = Math.floor(saldo / n)
+    for (let i = 0; i < n; i++) {
+      const fecha = new Date(startYear, startMonth + i, startDia)
 
-  const montoUltima = saldo - montoPorCuota * (n - 1)
+      const day = String(fecha.getDate()).padStart(2, "0")
 
-  // TODO(calculos): este for ignora el dia de fechaPrimerVto (siempre 1) y
-  // con n fraccionario nunca aplica montoUltima, dejando las cuotas sin
-  // cuadrar contra el saldo. Ver el TODO de generarPlan mas arriba.
+      const fechaVenc = `${day} ${MESES_CORTOS[fecha.getMonth()]}, ${fecha.getFullYear()}`
 
-  for (let i = 0; i < n; i++) {
-    const fecha = new Date(startYear, startMonth + i, 1)
+      tx.insert(cuotas)
+        .values({
+          id: idUnico("cuo"),
 
-    const day = String(fecha.getDate()).padStart(2, "0")
+          ficheroId: fichero.id,
 
-    const fechaVenc = `${day} ${monthsArr[fecha.getMonth()]}, ${fecha.getFullYear()}`
+          nroCuota: i + 1,
 
-    db.insert(cuotas)
-      .values({
-        id: idUnico("cuo"),
+          fechaVencimiento: fechaVenc,
 
-        ficheroId: fichero.id,
+          montoPlanificado:
+            i === n - 1
+              ? deCentavos(montoUltimaC)
+              : deCentavos(montoPorCuotaC),
 
-        nroCuota: i + 1,
+          montoPagado: 0,
 
-        fechaVencimiento: fechaVenc,
+          estado: "Pendiente",
 
-        montoPlanificado: i === n - 1 ? montoUltima : montoPorCuota,
+          descripcion: `Cuota ${i + 1}/${n}`,
 
-        montoPagado: 0,
+          createdAt: new Date(),
+        })
+        .run()
+    }
 
-        estado: "Pendiente",
-
-        descripcion: `Cuota ${i + 1}/${n}`,
-
-        createdAt: new Date(),
-      })
+    tx.update(ficheros)
+      .set({ tipoCobro: "cuotas", cantCuotas: n })
+      .where(eq(ficheros.id, fichero.id))
       .run()
-  }
-
-  db.update(ficheros)
-    .set({ tipoCobro: "cuotas", cantCuotas: n })
-    .where(eq(ficheros.id, fichero.id))
-    .run()
+  })
 
   res.json({ ok: true, cuotasGeneradas: n })
 }
@@ -319,7 +371,9 @@ export function agregarCargo(req: Request, res: Response) {
 
   const { fechaVencimiento, monto, descripcion } = req.body
 
-  if (!monto || monto <= 0) {
+  const montoC = aCentavos(monto)
+
+  if (montoC <= 0) {
     res.status(400).json({ error: "Monto obligatorio mayor a 0" })
 
     return
@@ -343,7 +397,7 @@ export function agregarCargo(req: Request, res: Response) {
 
       fechaVencimiento: fechaVencimiento || getCurrentDateStr(),
 
-      montoPlanificado: monto,
+      montoPlanificado: deCentavos(montoC),
 
       montoPagado: 0,
 
@@ -358,6 +412,13 @@ export function agregarCargo(req: Request, res: Response) {
   res.status(201).json({ ok: true })
 }
 
+/**
+ * El front manda `montoPlanificado` (ClienteDetalle.tsx), pero esto leia
+ * `monto`. Como las dos claves no coinciden, editar el importe de una cuota
+ * devolvia {ok:true} sin cambiar nada: el modal se cerraba, la pantalla se
+ * recargaba y el importe viejo seguia ahi. Se aceptan las dos claves para no
+ * romper clientes viejos.
+ */
 export function editarCuota(req: Request, res: Response) {
   const cuota = getCuotaDeCliente(
     req.params.id as string,
@@ -372,6 +433,7 @@ export function editarCuota(req: Request, res: Response) {
 
   const {
     fechaVencimiento,
+    montoPlanificado,
     monto,
     descripcion,
     metodo,
@@ -379,26 +441,79 @@ export function editarCuota(req: Request, res: Response) {
     observaciones,
   } = req.body
 
+  const nuevoMonto = montoPlanificado !== undefined ? montoPlanificado : monto
+
+  if (nuevoMonto !== undefined) {
+    const n = Number(nuevoMonto)
+
+    if (!Number.isFinite(n)) {
+      res.status(400).json({ error: "El monto planificado debe ser un numero" })
+
+      return
+    }
+
+    const nC = aCentavos(n)
+    const pagadoC = aCentavos(cuota.montoPagado)
+
+    if (nC < 0) {
+      res.status(400).json({ error: "El monto planificado no puede ser negativo" })
+
+      return
+    }
+
+    // Bajar el planificado por debajo de lo ya cobrado dejaba la cuota en un
+    // estado imposible: pagado 40.000 sobre un planificado de 1.
+    if (nC < pagadoC) {
+      res.status(400).json({
+        error:
+          `El monto planificado no puede ser menor a lo ya cobrado ` +
+          `(${deCentavos(pagadoC).toLocaleString("es-AR")})`,
+      })
+
+      return
+    }
+  }
+
+  const cambios = {
+    ...(fechaVencimiento !== undefined && { fechaVencimiento }),
+
+    ...(nuevoMonto !== undefined && {
+      montoPlanificado: deCentavos(aCentavos(Number(nuevoMonto))),
+    }),
+
+    ...(descripcion !== undefined && { descripcion }),
+
+    ...(metodo !== undefined && { metodo }),
+
+    ...(comprobante !== undefined && { comprobante }),
+
+    ...(observaciones !== undefined && { observaciones }),
+  }
+
+  if (Object.keys(cambios).length === 0) {
+    res.status(400).json({ error: "No se envio ningun campo para actualizar" })
+
+    return
+  }
+
   db.update(cuotas)
-    .set({
-      ...(fechaVencimiento !== undefined && { fechaVencimiento }),
-
-      ...(monto !== undefined && { montoPlanificado: monto }),
-
-      ...(descripcion !== undefined && { descripcion }),
-
-      ...(metodo !== undefined && { metodo }),
-
-      ...(comprobante !== undefined && { comprobante }),
-
-      ...(observaciones !== undefined && { observaciones }),
-    })
+    .set(cambios)
     .where(eq(cuotas.id, req.params.cuotaId as string))
     .run()
 
   res.json({ ok: true })
 }
 
+/**
+ * Registrar un cobro de cuota.
+ *
+ * Antes escribia SOLO en `cuotas`: el sistema registraba que el cliente pago
+ * pero la caja no se enteraba. `/caja/resumen`, el dashboard y el snapshot del
+ * periodo no incluian ese ingreso, asi que el efectivo y las cuentas por
+ * cobrar nunca cuadraban.
+ *
+ * Ahora escribe la cuota y su movimiento de caja en una sola transaccion.
+ */
 export function registrarCobro(req: Request, res: Response) {
   const cuota = getCuotaDeCliente(
     req.params.id as string,
@@ -411,37 +526,175 @@ export function registrarCobro(req: Request, res: Response) {
     return
   }
 
-  const { monto, metodo, comprobante, observaciones } = req.body
+  const { monto: montoRaw, metodo, comprobante, observaciones, fecha, subCaja } = req.body
 
-  if (!monto || monto <= 0) {
+  // Sin validacion, mandar "abc" guardaba la cadena "0abc" en una columna
+  // INTEGER y el saldo quedaba corrupto para siempre. `aCentavos` devuelve 0
+  // para cualquier entrada ilegible, asi que el chequeo de abajo la corta.
+  const montoC = aCentavos(montoRaw)
+
+  if (montoC <= 0) {
     res.status(400).json({ error: "Monto obligatorio mayor a 0" })
 
     return
   }
 
-  const nuevoMontoPagado = cuota.montoPagado + monto
+  const monto = deCentavos(montoC)
+
+  if (cuota.estado === "Pagada") {
+    res.status(409).json({
+      error:
+        `Esta cuota ya esta Pagada (monto pagado: ` +
+        `${(cuota.montoPagado ?? 0).toLocaleString("es-AR")}). ` +
+        `No se puede volver a cobrar.`,
+    })
+
+    return
+  }
+
+  const pagadoC = aCentavos(cuota.montoPagado)
+
+  const saldoC = aCentavos(cuota.montoPlanificado) - pagadoC
+
+  if (montoC > saldoC) {
+    res.status(400).json({
+      error:
+        `El monto supera el saldo de la cuota. ` +
+        `Planificado: ${cuota.montoPlanificado.toLocaleString("es-AR")}, ` +
+        `pagado: ${deCentavos(pagadoC).toLocaleString("es-AR")}, ` +
+        `saldo: ${deCentavos(saldoC).toLocaleString("es-AR")}`,
+    })
+
+    return
+  }
+
+  const fechaCobro = fecha ? String(fecha) : hoyISO()
+
+  if (!FECHA_REGEX.test(fechaCobro)) {
+    res.status(400).json({ error: "La fecha debe tener formato yyyy-mm-dd" })
+
+    return
+  }
+
+  const cajaNombre = subCaja ? String(subCaja).trim() : "Efectivo"
+
+  const caja = db
+    .select()
+    .from(cajas)
+    .where(eq(cajas.nombre, cajaNombre))
+    .get()
+
+  if (!caja) {
+    res.status(400).json({ error: `La caja "${cajaNombre}" no existe` })
+
+    return
+  }
+
+  if (caja.activa !== 1) {
+    res.status(400).json({ error: `La caja "${cajaNombre}" esta inactiva` })
+
+    return
+  }
+
+  try {
+    assertMesAbierto(fechaCobro)
+  } catch (e) {
+    res.status(409).json({ error: (e as Error).message })
+
+    return
+  }
+
+  // El cobro escribe en `movimientos` (protegido por el guard) y en `cuotas`
+  // (que no lo esta). Si el periodo esta cerrado, el guard de arriba ya
+  // corto; este registro cubre el caso de que la cuota sea de otro periodo.
+  registrarDesvio({
+    fecha: fechaCobro,
+    tabla: "cuotas",
+    operacion: "cobro",
+    entidadId: cuota.id,
+    detalle: `${monto.toLocaleString("es-AR")} a la cuota ${cuota.nroCuota}`,
+  })
+
+  const nuevoMontoPagadoC = pagadoC + montoC
 
   const nuevoEstado =
-    nuevoMontoPagado >= cuota.montoPlanificado ? "Pagada" : "Parcial"
+    nuevoMontoPagadoC >= aCentavos(cuota.montoPlanificado)
+      ? "Pagada"
+      : "Parcial"
 
-  db.update(cuotas)
-    .set({
-      montoPagado: nuevoMontoPagado,
+  const nuevoMontoPagado = deCentavos(nuevoMontoPagadoC)
 
-      estado: nuevoEstado,
+  const fichero = db
+    .select()
+    .from(ficheros)
+    .where(eq(ficheros.id, cuota.ficheroId))
+    .get()
 
-      fechaPago: getCurrentDateStr(),
+  const cliente = db
+    .select()
+    .from(clientes)
+    .where(eq(clientes.id, req.params.id as string))
+    .get()
 
-      ...(metodo !== undefined && { metodo }),
+  const movimientoId = idUnico("mov")
 
-      ...(comprobante !== undefined && { comprobante }),
+  const concepto = `Cobro cuota ${cuota.nroCuota}/${fichero?.cantCuotas ?? "?"}${
+    cliente ? ` - ${cliente.nombre}` : ""
+  }`
 
-      ...(observaciones !== undefined && { observaciones }),
+  try {
+    db.transaction(tx => {
+      tx.update(cuotas)
+        .set({
+          montoPagado: nuevoMontoPagado,
+
+          estado: nuevoEstado,
+
+          fechaPago: getCurrentDateStr(),
+
+          ...(metodo !== undefined && { metodo }),
+
+          ...(comprobante !== undefined && { comprobante }),
+
+          ...(observaciones !== undefined && { observaciones }),
+        })
+        .where(eq(cuotas.id, req.params.cuotaId as string))
+        .run()
+
+      tx.insert(movimientos)
+        .values({
+          id: movimientoId,
+
+          fecha: fechaCobro,
+
+          concepto,
+
+          monto,
+
+          tipo: "ingreso",
+
+          subCaja: cajaNombre,
+
+          categoria: CATEGORIA_COBRO_CUOTA,
+
+          ...(comprobante !== undefined && { comprobante }),
+
+          createdAt: new Date(),
+        })
+        .run()
     })
-    .where(eq(cuotas.id, req.params.cuotaId as string))
-    .run()
+  } catch (e) {
+    res.status(500).json({ error: (e as Error).message })
 
-  res.json({ ok: true, nuevoEstado, montoPagado: nuevoMontoPagado })
+    return
+  }
+
+  res.json({
+    ok: true,
+    nuevoEstado,
+    montoPagado: nuevoMontoPagado,
+    movimientoId,
+  })
 }
 
 export function eliminarCuota(req: Request, res: Response) {

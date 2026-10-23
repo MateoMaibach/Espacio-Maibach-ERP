@@ -10,6 +10,9 @@ import {
   type Compra,
   type OrdenPagoCompraLink,
 } from "@/services/api";
+import { parseArray } from "@/utils/json";
+import { formatMonto } from "@/utils/money";
+import ErrorBanner from "@/components/ErrorBanner";
 
 interface Linea {
   metodo: "caja" | "cheque";
@@ -43,18 +46,7 @@ function hoy(): string {
 }
 
 function parseItems(raw: Compra["items"]): { detalle: string }[] {
-  if (Array.isArray(raw)) return raw;
-  try {
-    const parsed = JSON.parse(String(raw));
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function formatMonto(value: number, moneda: string): string {
-  if (moneda === "ARS") return `$${value.toLocaleString("es-AR")}`;
-  return `${moneda} ${value.toLocaleString("es-AR")}`;
+  return parseArray<{ detalle: string }>(raw);
 }
 
 const lineaVacia = (subCaja: string, moneda: string): Linea => ({
@@ -76,6 +68,7 @@ export default function OrdenPagoModal({
   const [concepto, setConcepto] = useState(`Pago a ${proveedorNombre}`);
   const [observaciones, setObservaciones] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [apiError, setApiError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const [cajas, setCajas] = useState<CajaItem[]>([]);
@@ -103,8 +96,13 @@ export default function OrdenPagoModal({
       const primeraCaja = cajasData[0]?.nombre ?? "Efectivo";
       const primeraMoneda = monedasData[0] ?? "ARS";
       setLineas([lineaVacia(primeraCaja, primeraMoneda)]);
+      setApiError(null);
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Error al cargar los datos de la orden");
+      setApiError(
+        err instanceof Error
+          ? err.message
+          : "Error al cargar los datos de la orden",
+      );
     } finally {
       setCargando(false);
     }
@@ -246,6 +244,7 @@ export default function OrdenPagoModal({
   async function handleGuardar() {
     if (!validate()) return;
     setSaving(true);
+    setApiError(null);
     try {
       const detalles = lineas.map((linea) => {
         const esCheque = linea.metodo === "cheque";
@@ -273,7 +272,9 @@ export default function OrdenPagoModal({
       });
       onCreated();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Error al crear la orden de pago");
+      setApiError(
+        err instanceof Error ? err.message : "Error al crear la orden de pago",
+      );
     } finally {
       setSaving(false);
     }
@@ -321,6 +322,12 @@ export default function OrdenPagoModal({
           </div>
         ) : (
           <div className="px-[24px] py-[20px] flex flex-col gap-[20px]">
+            {apiError && (
+              <ErrorBanner
+                mensaje={apiError}
+                onCerrar={() => setApiError(null)}
+              />
+            )}
             <div className="grid grid-cols-2 gap-[12px]">
               <div>
                 <label className={labelClass}>Fecha *</label>
