@@ -1,0 +1,53 @@
+# Autenticacion de git
+permissions:
+  contents: read
+
+# Cancelar corridas viejas si se pushea de nuevo al mismo branch.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: [dev-1, main]
+  pull_request:
+
+jobs:
+  verificar:
+    name: Typecheck + tests de la API
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # Raiz: front (Vite + React)
+      - name: Instalar dependencias del front
+        run: npm ci
+
+      # server: Express + better-sqlite3 (node-gyp, necesita build-essential)
+      - name: Instalar dependencias del server
+        run: npm --prefix server ci
+
+      # El typecheck del front cubre SOLO src/. El server tiene su propio
+      # proyecto tsconfig y antes no lo typechequeaba nadie.
+      - name: Typecheck del front
+        run: npx tsc -b
+
+      - name: Build del front
+        run: npm run build
+
+      - name: Typecheck del server
+        run: npm --prefix server run typecheck
+
+      # Levanta su propio server en :3002 contra espacio.test.db, corre la
+      # suite y lo baja. No toca espacio.db.
+      - name: Tests de la API
+        run: npm --prefix server run test:api
+
+      - name: Tests de money.ts
+        run: npm --prefix server run test:unit
