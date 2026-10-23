@@ -13,6 +13,14 @@
  * vencimientos hay que parsear en JS.
  */
 
+/**
+ * Formato `YYYY-MM-DD`, el unico que aceptan los endpoints con fecha validada.
+ *
+ * Estaba copiado en 6 controllers (compras, instalaciones, ordenesPago,
+ * remitos, stock, veredas). Vive aca para que todos validen lo mismo.
+ */
+export const FECHA_REGEX = /^\d{4}-\d{2}-\d{2}$/
+
 const MESES = [
   "Ene",
   "Feb",
@@ -67,6 +75,26 @@ export function parseFecha(raw: unknown): Fecha | null {
 
 function pad(n: number): string {
   return String(n).padStart(2, "0")
+}
+
+/**
+ * Solo el mes y el anio, para filtrar por periodo.
+ *
+ * existed duplicado en `caja.controller.ts` como privado, con un criterio
+ * MAS permisivo que `parseFecha` (aceptaba `2026-13-45`). Con dos versiones
+ * distintas, una fecha que una acepta la otra la descarta, y el mismo dato
+ * aparecia en un reporte y no en otro.
+ *
+ * Aca se exige un calendario de verdad: mismo criterio para todos.
+ */
+export function parseMesAnio(raw: unknown): { mes: number; anio: number } | null {
+  const f = parseFecha(raw)
+
+  if (!f) return null
+
+  if (f.mes < 1 || f.mes > 12) return null
+
+  return { mes: f.mes, anio: f.anio }
 }
 
 /** "2026-10-10", para comparar contra hoy() y para ordenar. */

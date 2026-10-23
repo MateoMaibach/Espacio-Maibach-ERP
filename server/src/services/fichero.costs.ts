@@ -6,13 +6,30 @@
  * guardado quede desfasado respecto del total real.
  */
 
-/** "$1.950.000" -> 1950000. Los totales se guardan como texto formateado. */
+import { aCentavos, deCentavos } from "./money.js"
+
+/**
+ * Lee un monto guardado como texto formateado y devuelve PESOS.
+ *
+ * Antes: `parseInt(valor.replace(/[^0-9]/g, ""))`. Eso borra los no-dígitos y
+ * despues interpreta, asi que `"$1.950.000,50"` -> `"195000050"` -> 195.000.050:
+ * una inflación de x100. Con `"100,50"` daba 10050 en vez de 100,50.
+ *
+ * La versión vieja vivía duplicada en 3 archivos
+ * (`fichero.costs.ts`, `dashboard.controller.ts`, `cuotas.controller.ts`).
+ * Las tres tienen el mismo defecto; ahora hay una sola y delega en `money.ts`.
+ *
+ * Nota: devuelve un numero con decimales. Las columnas siguen siendo INTEGER,
+ * asi que al guardar se redondea (ver `schema.ts`, TODO deesquema).
+ */
 export function parseMonto(value: unknown): number {
-  if (typeof value === "number") return Number.isFinite(value) ? value : 0
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : 0
+  }
 
   if (typeof value !== "string") return 0
 
-  return parseInt(value.replace(/[^0-9]/g, ""), 10) || 0
+  return deCentavos(aCentavos(value))
 }
 
 export interface Insumos {
