@@ -76,8 +76,11 @@ export function updateCliente(id: string, data: ClienteUpdate) {
   });
 }
 
-export function deleteCliente(id: string) {
-  return request<{ ok: true }>(`/clientes/${id}`, { method: "DELETE" });
+export function deleteCliente(id: string, forzar = false) {
+  return request<{ ok: true }>(
+    `/clientes/${id}${forzar ? "?forzar=1" : ""}`,
+    { method: "DELETE" },
+  );
 }
 
 // --- Ficheros ---
