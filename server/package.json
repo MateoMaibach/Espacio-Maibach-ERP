@@ -7,7 +7,10 @@
     "dev": "tsx watch src/index.ts",
     "migrate": "tsx src/db/migrate.ts",
     "seed": "node scripts/seed.mjs",
-    "migrar-costos": "node scripts/migrar-costos.mjs"
+    "migrar-costos": "node scripts/migrar-costos.mjs",
+    "test:api": "node scripts/test-api-run.mjs",
+    "test:unit": "node --import tsx scripts/test-money.mjs",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "better-sqlite3": "^11.0.0",
