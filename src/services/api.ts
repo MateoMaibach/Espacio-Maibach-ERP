@@ -1552,14 +1552,25 @@ export interface Categoria {
   createdAt: Date;
 }
 
-export function getCategorias(params?: { tipo?: "ingreso" | "egreso" }) {
-  const qs = params?.tipo ? `?tipo=${params.tipo}` : "";
+export function getCategorias(params?: {
+  tipo?: "ingreso" | "egreso";
 
-  return request<Categoria[]>(`/categorias${qs}`);
-}
+  /**
+   * Sin esto el endpoint devuelve solo activas. El panel de administracion lo
+   * necesita en 1: si no, al desactivar una categoria desaparece de la lista y
+   * no hay forma de volver a activarla.
+   */
+  incluirInactivas?: boolean;
+}) {
+  const qs = new URLSearchParams();
 
-export function getCategoriasUsadas() {
-  return request<{ categoria: string; n: number }[]>("/categorias/usadas");
+  if (params?.tipo) qs.set("tipo", params.tipo);
+
+  if (params?.incluirInactivas) qs.set("incluirInactivas", "1");
+
+  const query = qs.toString();
+
+  return request<Categoria[]>(`/categorias${query ? `?${query}` : ""}`);
 }
 
 export function createCategoria(data: {
