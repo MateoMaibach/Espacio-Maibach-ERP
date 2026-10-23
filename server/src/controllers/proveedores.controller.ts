@@ -313,7 +313,7 @@ export function remove(req: Request, res: Response) {
     .get()
 
   if ((comprasCount?.n ?? 0) > 0 || (ordenesCount?.n ?? 0) > 0) {
-    res.status(400).json({
+    res.status(409).json({
       error: `No se puede eliminar: tiene ${comprasCount?.n ?? 0} compra(s) y ${ordenesCount?.n ?? 0} orden(es) de pago asociadas.`,
     })
     return

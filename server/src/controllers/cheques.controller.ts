@@ -4,7 +4,7 @@ import { idUnico } from "../utils/id.js"
 
 import { db } from "../db/index.js"
 
-import { cheques, clientes, proveedores } from "../db/schema.js"
+import { cheques, clientes, proveedores, ordenesPago } from "../db/schema.js"
 
 import { eq, desc } from "drizzle-orm"
 
@@ -345,42 +345,44 @@ export function update(req: Request, res: Response) {
 
   let proveedorIdFinal: string | null | undefined
 
-  // TODO(calculos): como el front siempre manda `tipo`, este bloque corre
-  // siempre. Al editar un cheque `recibido` aplica=false y termina haciendo
-  // proveedorId: null, borrando el link con la orden de pago. Deberia tocar
-  // esos campos solo cuando el cliente los mande explicitos. Requiere
-  // cambiar comportamiento observable: revisar antes.
-
-  if (
-    aplicaPagoProveedor !== undefined ||
-    proveedorId !== undefined ||
-    tipo !== undefined
-  ) {
-    const aplica =
-      tipoFinal === "emitido" &&
-      Boolean(
+  /**
+   * Estos dos campos solo se tocan si el cliente los manda o si el cheque es
+   * de tipo `emitido` (que es el unico donde aplican).
+   *
+   * Antes el bloque corria siempre porque el front manda `tipo` en cada
+   * edicion: un cheque `recibido` terminaba con `aplica = false` y
+   * `proveedorId: null`, rompiendo el vinculo con la orden de pago que lo uso.
+   */
+  if (tipoFinal === "emitido") {
+    if (
+      aplicaPagoProveedor !== undefined ||
+      proveedorId !== undefined ||
+      tipo !== undefined
+    ) {
+      const aplica = Boolean(
         aplicaPagoProveedor !== undefined
           ? aplicaPagoProveedor
           : existing.aplicaPagoProveedor,
       )
 
-    const provId =
-      proveedorId !== undefined ? proveedorId || null : existing.proveedorId
+      const provId =
+        proveedorId !== undefined ? proveedorId || null : existing.proveedorId
 
-    if (aplica && !provId) {
-      res
-        .status(400)
-        .json({
-          error:
-            "Debe indicar el proveedor cuando el cheque aplica a un pago a proveedores",
-        })
+      if (aplica && !provId) {
+        res
+          .status(400)
+          .json({
+            error:
+              "Debe indicar el proveedor cuando el cheque aplica a un pago a proveedores",
+          })
 
-      return
+        return
+      }
+
+      aplicaPagoFinal = aplica ? 1 : 0
+
+      proveedorIdFinal = aplica ? provId : null
     }
-
-    aplicaPagoFinal = aplica ? 1 : 0
-
-    proveedorIdFinal = aplica ? provId : null
   }
 
   db.update(cheques)
@@ -429,6 +431,33 @@ export function update(req: Request, res: Response) {
   res.json({ ok: true })
 }
 
+/**
+ * Un cheque puede quedar embebido en el `detalles` de una orden de pago, que
+ * guarda un snapshot del estado (`chequeAnterior`) para poder revertirlo al
+ * anular. Sin esta guardia se podia borrar el cheque mientras la orden seguia
+ * "Pagada": el pago quedaba registrado contra un cheque inexistente y al anular
+ * la orden no habia nada que restaurar.
+ */
+function ordenesQueUsanElCheque(chequeId: string) {
+  const pagadas = db.select().from(ordenesPago).all()
+
+  return pagadas.filter(o => {
+    if (o.estado !== "Pagada") return false
+
+    let detalles: { chequeId?: string | null }[] = []
+
+    try {
+      const parsed = JSON.parse(o.detalles)
+
+      if (Array.isArray(parsed)) detalles = parsed
+    } catch {
+      return false
+    }
+
+    return detalles.some(d => d?.chequeId === chequeId)
+  })
+}
+
 export function remove(req: Request, res: Response) {
   const existing = db
     .select()
@@ -438,6 +467,19 @@ export function remove(req: Request, res: Response) {
 
   if (!existing) {
     res.status(404).json({ error: "Cheque no encontrado" })
+
+    return
+  }
+
+  const usos = ordenesQueUsanElCheque(existing.id)
+
+  if (usos.length > 0) {
+    res.status(409).json({
+      error:
+        `No se puede eliminar: el cheque está usado en ${usos.length} orden(es) de pago ` +
+        `pagada(s) (${usos.map(o => o.numero).join(", ")}). ` +
+        `Anulá la orden primero.`,
+    })
 
     return
   }

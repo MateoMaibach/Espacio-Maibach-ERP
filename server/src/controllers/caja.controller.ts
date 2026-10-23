@@ -6,7 +6,7 @@ import { db } from "../db/index.js"
 
 import { movimientos, cierres, cajas, categorias } from "../db/schema.js"
 
-import { eq } from "drizzle-orm"
+import { eq, and } from "drizzle-orm"
 
 import { CAT_AJUSTE_CIERRE } from "./categorias.controller.js"
 
@@ -14,24 +14,36 @@ import { montoEnARS, sumarEnARS, sumarMontosEnARS } from "../services/moneda.js"
 
 import { assertMesAbierto } from "../services/periodos.service.js"
 
+import { FECHA_REGEX, parseMesAnio } from "../utils/fecha.js"
+
+import { redondearTipoCambio } from "../services/money.js"
+
 function getCurrentDateStr(): string {
   const now = new Date()
 
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`
 }
 
-function parseFecha(fecha: string): { mes: number; anio: number } | null {
-  const parts = fecha.split("-")
+/**
+ * `movimientos.sub_caja` es TEXT libre sin FK contra `cajas.nombre`. Un
+ * movimiento contra una caja inexistente entra al listado pero
+ * `calcularResumenCaja` solo recorre las cajas activas, asi que el movimiento
+ * queda invisible en los totales. Conviene rechazarlo en el alta.
+ *
+ * Mismo criterio que `ordenesPago.validarDetalles` (`:130-139`).
+ */
+function validarSubCaja(nombre: unknown): string | null {
+  const limpio = String(nombre ?? "").trim()
 
-  if (parts.length < 3) return null
+  if (!limpio) return "Falta indicar la caja"
 
-  const anio = parseInt(parts[0])
+  const caja = db.select().from(cajas).where(eq(cajas.nombre, limpio)).get()
 
-  const mes = parseInt(parts[1])
+  if (!caja) return `La caja "${limpio}" no existe`
 
-  if (isNaN(anio) || isNaN(mes) || mes < 1 || mes > 12) return null
+  if (caja.activa !== 1) return `La caja "${limpio}" está inactiva`
 
-  return { mes, anio }
+  return null
 }
 
 /**
@@ -88,17 +100,63 @@ export function getMonedas(_req: Request, res: Response) {
   res.json([...set])
 }
 
-export function getAllMovimientos(req: Request, res: Response) {
-  const mes = parseInt(req.query.mes as string) || new Date().getMonth() + 1
+/**
+ * Lee un query param numérico.
+ *
+ * `parseInt(x) || default` hacia que `?mes=abc` devolviera silenciosamente los
+ * movimientos del mes actual, y que `?mes=0` se convirtiera en el mes actual
+ * (0 es falsy). Devolver null cuando viene y no es valido lets responde 400.
+ */
+function leerNumeroQuery(
+  valor: unknown,
+  nombre: string,
+): { valor: number } | { error: string } {
+  if (valor === undefined || valor === null || valor === "") {
+    return { error: `Falta el parametro "${nombre}"` }
+  }
 
-  const anio = parseInt(req.query.anio as string) || new Date().getFullYear()
+  const n = Number(valor)
+
+  if (!Number.isInteger(n)) {
+    return { error: `El parametro "${nombre}" debe ser un numero entero` }
+  }
+
+  return { valor: n }
+}
+
+export function getAllMovimientos(req: Request, res: Response) {
+  const mesRes = leerNumeroQuery(req.query.mes, "mes")
+
+  if ("error" in mesRes) {
+    res.status(400).json({ error: mesRes.error })
+
+    return
+  }
+
+  const anioRes = leerNumeroQuery(req.query.anio, "anio")
+
+  if ("error" in anioRes) {
+    res.status(400).json({ error: anioRes.error })
+
+    return
+  }
+
+  const mes = mesRes.valor
+
+  const anio = anioRes.valor
+
+  if (mes < 1 || mes > 12) {
+    res.status(400).json({ error: 'El parametro "mes" debe estar entre 1 y 12' })
+
+    return
+  }
 
   const subCaja = req.query.subCaja as string | undefined
 
   let allMovimientos = db.select().from(movimientos).all()
 
   allMovimientos = allMovimientos.filter((m) => {
-    const parsed = parseFecha(m.fecha)
+    const parsed = parseMesAnio(m.fecha)
 
     if (!parsed) return false
 
@@ -135,17 +193,17 @@ export function createMovimiento(req: Request, res: Response) {
   const {
     fecha,
     concepto,
-    monto,
+    monto: montoRaw,
     tipo,
     subCaja,
     moneda,
-    tipoCambio,
+    tipoCambio: tipoCambioRaw,
     categoria,
     comprobante,
     observaciones,
   } = req.body
 
-  if (!concepto || monto == null || monto === "" || !tipo || !subCaja) {
+  if (!concepto || montoRaw == null || montoRaw === "" || !tipo || !subCaja) {
     res
       .status(400)
       .json({
@@ -157,6 +215,44 @@ export function createMovimiento(req: Request, res: Response) {
 
   if (tipo !== "ingreso" && tipo !== "egreso") {
     res.status(400).json({ error: "Tipo debe ser 'ingreso' o 'egreso'" })
+
+    return
+  }
+
+  /**
+   * El signo lo lleva `tipo`, no `monto`. Sin esto, `monto: "abc"` pasaba
+   * el chequeo de presencia y se guardaba crudo en una columna INTEGER, y un
+   * egreso de -500 se aceptaba y despues se restaba dos veces.
+   */
+  const monto = Number(montoRaw)
+
+  if (!Number.isFinite(monto)) {
+    res.status(400).json({ error: "El monto debe ser un numero" })
+
+    return
+  }
+
+  if (monto < 0) {
+    res.status(400).json({
+      error: "El monto no puede ser negativo: usá el tipo ingreso o egreso para el signo",
+    })
+
+    return
+  }
+
+  if (monto === 0) {
+    res.status(400).json({ error: "El monto debe ser mayor a 0" })
+
+    return
+  }
+
+  // `subCaja` es el NOMBRE de una caja (columna TEXT sin FK). Sin validarlo,
+  // un movimiento contra una caja inexistente entra al listado pero
+  // `calcularResumenCaja` lo ignora, y el total general no lo ve.
+  const errorCaja = validarSubCaja(subCaja)
+
+  if (errorCaja) {
+    res.status(400).json({ error: errorCaja })
 
     return
   }
@@ -173,6 +269,12 @@ export function createMovimiento(req: Request, res: Response) {
 
   const fechaStr = fecha || getCurrentDateStr()
 
+  if (!FECHA_REGEX.test(fechaStr)) {
+    res.status(400).json({ error: "La fecha debe tener formato yyyy-mm-dd" })
+
+    return
+  }
+
   try {
     assertMesAbierto(fechaStr)
   } catch (e) {
@@ -182,6 +284,14 @@ export function createMovimiento(req: Request, res: Response) {
   }
 
   const monedaStr = moneda || "ARS"
+
+  const tipoCambio = redondearTipoCambio(tipoCambioRaw)
+
+  if (tipoCambioRaw !== undefined && tipoCambioRaw !== null && tipoCambioRaw !== "" && tipoCambio === null) {
+    res.status(400).json({ error: "El tipo de cambio debe ser un numero mayor a 0" })
+
+    return
+  }
 
   db.insert(movimientos)
     .values({
@@ -199,7 +309,7 @@ export function createMovimiento(req: Request, res: Response) {
 
       moneda: monedaStr,
 
-      tipoCambio: tipoCambio || null,
+      tipoCambio,
 
       categoria: categoriaFinal.valor,
 
@@ -258,6 +368,49 @@ export function updateMovimiento(req: Request, res: Response) {
     return
   }
 
+  if (monto !== undefined) {
+    const n = Number(monto)
+
+    if (!Number.isFinite(n)) {
+      res.status(400).json({ error: "El monto debe ser un numero" })
+
+      return
+    }
+
+    if (n <= 0) {
+      res.status(400).json({ error: "El monto debe ser mayor a 0" })
+
+      return
+    }
+  }
+
+  if (subCaja !== undefined) {
+    const errorCaja = validarSubCaja(subCaja)
+
+    if (errorCaja) {
+      res.status(400).json({ error: errorCaja })
+
+      return
+    }
+  }
+
+  if (fecha !== undefined && !FECHA_REGEX.test(String(fecha))) {
+    res.status(400).json({ error: "La fecha debe tener formato yyyy-mm-dd" })
+
+    return
+  }
+
+  if (
+    tipoCambio !== undefined &&
+    tipoCambio !== null &&
+    tipoCambio !== "" &&
+    redondearTipoCambio(tipoCambio) === null
+  ) {
+    res.status(400).json({ error: "El tipo de cambio debe ser un numero mayor a 0" })
+
+    return
+  }
+
   // "" o null significan "quitar la categoría". Antes el front mandaba
   // undefined y el spread lo salteaba, así que no se podía limpiar.
   const tocaCategoria = "categoria" in req.body
@@ -273,11 +426,11 @@ export function updateMovimiento(req: Request, res: Response) {
 
   db.update(movimientos)
     .set({
-      ...(fecha !== undefined && { fecha }),
+      ...(fecha !== undefined && { fecha: String(fecha) }),
 
       ...(concepto !== undefined && { concepto }),
 
-      ...(monto !== undefined && { monto }),
+      ...(monto !== undefined && { monto: Number(monto) }),
 
       ...(tipo !== undefined && { tipo }),
 
@@ -285,7 +438,7 @@ export function updateMovimiento(req: Request, res: Response) {
 
       ...(moneda !== undefined && { moneda }),
 
-      ...(tipoCambio !== undefined && { tipoCambio }),
+      ...(tipoCambio !== undefined && { tipoCambio: redondearTipoCambio(tipoCambio) }),
 
       ...(tocaCategoria && { categoria: categoriaFinal.valor }),
 
@@ -369,7 +522,7 @@ export function getCierresPreview(req: Request, res: Response) {
   const allMovimientos = db.select().from(movimientos).all()
 
   const mesMovimientos = allMovimientos.filter((m) => {
-    const parsed = parseFecha(m.fecha)
+    const parsed = parseMesAnio(m.fecha)
 
     if (!parsed) return false
 
@@ -398,9 +551,16 @@ export function getCierresPreview(req: Request, res: Response) {
 }
 
 export function realizarCierre(req: Request, res: Response) {
-  const { mes, anio, subCaja, saldoReal, observaciones, fecha } = req.body
+  const {
+    mes: mesRaw,
+    anio: anioRaw,
+    subCaja,
+    saldoReal: saldoRealRaw,
+    observaciones,
+    fecha,
+  } = req.body
 
-  if (!mes || !anio || !subCaja || saldoReal === undefined) {
+  if (!mesRaw || !anioRaw || !subCaja || saldoRealRaw === undefined) {
     res
       .status(400)
       .json({
@@ -410,10 +570,74 @@ export function realizarCierre(req: Request, res: Response) {
     return
   }
 
+  const mes = Number(mesRaw)
+
+  const anio = Number(anioRaw)
+
+  if (!Number.isInteger(mes) || mes < 1 || mes > 12) {
+    res.status(400).json({ error: "El mes debe ser un numero entre 1 y 12" })
+
+    return
+  }
+
+  if (!Number.isInteger(anio) || anio < 2000) {
+    res.status(400).json({ error: "El año debe ser un numero valido" })
+
+    return
+  }
+
+  /**
+   * Sin este chequeo, `saldoReal: "mucho"` producia `diff = NaN` y se
+   * insertaba `Math.abs(NaN)` en una columna INTEGER, reventando con un 500.
+   */
+  const saldoReal = Number(saldoRealRaw)
+
+  if (!Number.isFinite(saldoReal)) {
+    res.status(400).json({ error: "El saldo real debe ser un numero" })
+
+    return
+  }
+
+  const errorCaja = validarSubCaja(subCaja)
+
+  if (errorCaja) {
+    res.status(400).json({ error: errorCaja })
+
+    return
+  }
+
+  if (fecha !== undefined && !FECHA_REGEX.test(String(fecha))) {
+    res.status(400).json({ error: "La fecha debe tener formato yyyy-mm-dd" })
+
+    return
+  }
+
+  // Cerrar dos veces el mismo mes y sub-caja encadena saldos sobre un cierre
+  // ya dado, sin que quede registro de que fue un error.
+  const yaCerrado = db
+    .select()
+    .from(cierres)
+    .where(
+      and(
+        eq(cierres.mes, mes),
+        eq(cierres.anio, anio),
+        eq(cierres.subCaja, subCaja),
+      ),
+    )
+    .get()
+
+  if (yaCerrado) {
+    res.status(409).json({
+      error: `Ya existe un cierre de "${subCaja}" para ${mes}/${anio}`,
+    })
+
+    return
+  }
+
   const allMovimientos = db.select().from(movimientos).all()
 
   const mesMovimientos = allMovimientos.filter((m) => {
-    const parsed = parseFecha(m.fecha)
+    const parsed = parseMesAnio(m.fecha)
 
     if (!parsed) return false
 
@@ -443,69 +667,83 @@ export function realizarCierre(req: Request, res: Response) {
   const diff = saldoReal - (saldoInicial + saldoFinal)
 
   if (diff !== 0) {
-    const ajusteTipo = diff > 0 ? "ingreso" : "egreso"
+    // El ajuste va con la fecha del periodo que se esta cerrando, no con la de
+    // hoy. Con la de hoy, al cerrar un mes pasado la diferencia aparecia en el
+    // mes en curso y alteraba un resumen que no le correspondia.
+    //
+    // `movimientos` es justamente la tabla que el guard de mes cerrado
+    // protege. Sin este chequeo, cerrar una caja de un mes cerrado escribia el
+    // ajuste igual y se colaba por la puerta de atrás del propio guard.
+    try {
+      assertMesAbierto(`${anio}-${String(mes).padStart(2, "0")}-01`)
+    } catch (e) {
+      res.status(409).json({ error: (e as Error).message })
 
-    const ajusteMonto = Math.abs(diff)
-
-    // TODO(calculos): el ajuste se fecha con getCurrentDateStr() en vez de la
-  // fecha del periodo cerrado, asi que al cerrar un mes pasado la diferencia
-  // aparece en el mes actual y altera el resumen de ese mes.
-
-    db.insert(movimientos)
-      .values({
-        id: idUnico("mov_ajuste"),
-
-        fecha: getCurrentDateStr(),
-
-        concepto: `Ajuste por cierre ${subCaja} - ${fecha || getCurrentDateStr()}`,
-
-        monto: ajusteMonto,
-
-        tipo: ajusteTipo,
-
-        subCaja,
-
-        moneda: "ARS",
-
-        categoria: CAT_AJUSTE_CIERRE,
-
-        observaciones:
-          observaciones || `Diferencia de $${diff.toLocaleString("es-AR")}`,
-
-        createdAt: new Date(),
-      })
-      .run()
+      return
+    }
   }
 
   const id = idUnico("cierre")
 
-  db.insert(cierres)
-    .values({
-      id,
+  // Ajuste y fila de cierre en una sola transaccion. Antes eran dos escrituras
+  // sueltas: si fallaba la segunda, quedaba un movimiento de ajuste sin
+  // ningun cierre que lo justificara, y al reintentar se duplicaba el ajuste.
+  db.transaction(tx => {
+    if (diff !== 0) {
+      tx.insert(movimientos)
+        .values({
+          id: idUnico("mov_ajuste"),
 
-      mes,
+          fecha: `${anio}-${String(mes).padStart(2, "0")}-01`,
 
-      anio,
+          concepto: `Ajuste por cierre ${subCaja} - ${mes}/${anio}`,
 
-      subCaja,
+          monto: Math.abs(diff),
 
-      saldoInicial,
+          tipo: diff > 0 ? "ingreso" : "egreso",
 
-      saldoFinal,
+          subCaja,
 
-      saldoReal,
+          moneda: "ARS",
 
-      diferencia: diff,
+          categoria: CAT_AJUSTE_CIERRE,
 
-      fecha: fecha || getCurrentDateStr(),
+          observaciones:
+            observaciones || `Diferencia de $${diff.toLocaleString("es-AR")}`,
 
-      fechaCierre: getCurrentDateStr(),
+          createdAt: new Date(),
+        })
+        .run()
+    }
 
-      observaciones: observaciones || null,
+    tx.insert(cierres)
+      .values({
+        id,
 
-      createdAt: new Date(),
-    })
-    .run()
+        mes,
+
+        anio,
+
+        subCaja,
+
+        saldoInicial,
+
+        saldoFinal,
+
+        saldoReal,
+
+        diferencia: diff,
+
+        fecha: fecha || getCurrentDateStr(),
+
+        fechaCierre: getCurrentDateStr(),
+
+        observaciones: observaciones || null,
+
+        createdAt: new Date(),
+      })
+      .run()
+  })
 
   res.status(201).json({ ok: true, id, diferencia: diff })
 }
@@ -525,7 +763,7 @@ export function calcularResumenCaja(mes: number, anio: number): ResumenCaja {
   const allMovimientos = db.select().from(movimientos).all()
 
   const mesMovimientos = allMovimientos.filter((m) => {
-    const parsed = parseFecha(m.fecha)
+    const parsed = parseMesAnio(m.fecha)
 
     if (!parsed) return false
 

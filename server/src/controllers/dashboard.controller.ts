@@ -31,14 +31,7 @@ import {
   ultimosMeses,
 } from "../utils/fecha.js"
 
-/** "$1.234.567" -> 1234567. Los ficheros guardan el total como texto. */
-function parseMonto(value: unknown): number {
-  if (typeof value === "number") return Number.isFinite(value) ? value : 0
-
-  if (typeof value !== "string") return 0
-
-  return parseInt(value.replace(/[^0-9]/g, ""), 10) || 0
-}
+import { parseMonto } from "../services/fichero.costs.js"
 
 /** Un cheque "en juego" todavia no se cobro ni se deposited. */
 const CHEQUES_VIGENTES = new Set(["Pendiente", "En Cartera"])
