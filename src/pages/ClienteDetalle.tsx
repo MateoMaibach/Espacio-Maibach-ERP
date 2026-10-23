@@ -43,6 +43,8 @@ import {
 
 import LocalidadSelector from "@/components/LocalidadSelector";
 
+import ErrorBanner from "@/components/ErrorBanner";
+
 const estadoStyle: Record<string, { bg: string; color: string }> = {
   Activo: { bg: "#d1fae5", color: "#10b981" },
 
@@ -116,7 +118,11 @@ export default function ClienteDetalle() {
         );
       })
 
-      .catch(console.error);
+      .catch((e) =>
+        setErrorAccion(
+          e instanceof Error ? e.message : "No se pudieron cargar los proveedores",
+        ),
+      );
   }, []);
 
   const [cajas, setCajas] = useState<CajaItem[]>([]);
@@ -125,7 +131,11 @@ export default function ClienteDetalle() {
     getCajas()
       .then((data) => setCajas(data.filter((c) => c.activa === 1)))
 
-      .catch(console.error);
+      .catch((e) =>
+        setErrorAccion(
+          e instanceof Error ? e.message : "No se pudieron cargar las cajas",
+        ),
+      );
   }, []);
 
   const sinFichero = !cliente?.fichero;
@@ -978,31 +988,14 @@ function handleOpenEditarFichero() {
     >
       <div className="p-[32px] flex flex-col gap-[24px]">
         {errorCarga && (
-          <div className="flex items-center justify-between gap-[12px] rounded-[8px] bg-[#fef2f2] px-[12px] py-[10px]">
-            <p className="font-['Geist:Regular',sans-serif] text-[#b91c1c] text-[13px]">
-              {errorCarga}
-            </p>
-            <button
-              onClick={reloadCliente}
-              className="font-['Geist:Medium',sans-serif] font-medium text-[13px] text-[#b91c1c] px-[10px] py-[4px] rounded-[6px] hover:bg-[#fee2e2] transition-colors"
-            >
-              Reintentar
-            </button>
-          </div>
+          <ErrorBanner mensaje={errorCarga} onReintentar={reloadCliente} />
         )}
 
         {errorAccion && (
-          <div className="flex items-center justify-between gap-[12px] rounded-[8px] bg-[#fef2f2] px-[12px] py-[10px]">
-            <p className="font-['Geist:Regular',sans-serif] text-[#b91c1c] text-[13px]">
-              {errorAccion}
-            </p>
-            <button
-              onClick={() => setErrorAccion(null)}
-              className="font-['Geist:Medium',sans-serif] font-medium text-[13px] text-[#b91c1c] px-[10px] py-[4px] rounded-[6px] hover:bg-[#fee2e2] transition-colors"
-            >
-              Cerrar
-            </button>
-          </div>
+          <ErrorBanner
+            mensaje={errorAccion}
+            onCerrar={() => setErrorAccion(null)}
+          />
         )}
 
         {/* Title */}

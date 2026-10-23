@@ -6,6 +6,8 @@ import AppLayout from "@/layouts/AppLayout";
 
 import { IconSearch, IconPlus } from "@/components/Icons";
 
+import ErrorBanner from "@/components/ErrorBanner";
+
 import { formatFecha, toISODate } from "@/utils/fecha";
 import { formatMonto } from "@/utils/money";
 
@@ -150,6 +152,10 @@ export default function Cheques() {
 
   const [loading, setLoading] = useState(true);
 
+  const [error, setError] = useState<string | null>(null);
+
+  const [errorModal, setErrorModal] = useState<string | null>(null);
+
   const [search, setSearch] = useState("");
 
   const [filtroEstado, setFiltroEstado] = useState("Todos");
@@ -182,10 +188,10 @@ export default function Cheques() {
       setBancos(bancosData);
 
       setProveedores(proveedoresData || []);
-    } catch (err) {
-      console.error(err);
 
-      alert("Error al cargar los cheques");
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al cargar los cheques");
     } finally {
       setLoading(false);
     }
@@ -277,6 +283,8 @@ export default function Cheques() {
       ...(tipo === "emitido" ? { fechaEmision: hoy } : { fechaRecepcion: hoy }),
     });
 
+    setErrorModal(null);
+
     setShowModal(true);
   }
 
@@ -317,6 +325,8 @@ export default function Cheques() {
       proveedorId: c.proveedorId || "",
     });
 
+    setErrorModal(null);
+
     setShowModal(true);
   }
 
@@ -345,28 +355,34 @@ export default function Cheques() {
 
     const importe = Number(form.importe);
 
-    if (!banco) return alert("El banco es obligatorio");
+    if (!banco) return setErrorModal("El banco es obligatorio");
 
-    if (!numero) return alert("El número de cheque es obligatorio");
+    if (!numero) return setErrorModal("El número de cheque es obligatorio");
 
-    if (!form.fechaCobro) return alert("La fecha de cobro es obligatoria");
+    if (!form.fechaCobro) return setErrorModal("La fecha de cobro es obligatoria");
 
     if (!Number.isFinite(importe) || importe <= 0)
-      return alert("El importe debe ser un número mayor a 0");
+      return setErrorModal("El importe debe ser un número mayor a 0");
 
-    if (!form.estado) return alert("El estado es obligatorio");
+    if (!form.estado) return setErrorModal("El estado es obligatorio");
 
     if (tipo === "emitido") {
-      if (!form.destinatario.trim()) return alert("El destinatario es obligatorio");
+      if (!form.destinatario.trim())
+        return setErrorModal("El destinatario es obligatorio");
 
-      if (!form.fechaEmision) return alert("La fecha de emisión es obligatoria");
+      if (!form.fechaEmision)
+        return setErrorModal("La fecha de emisión es obligatoria");
 
       if (form.aplicaPagoProveedor && !form.proveedorId)
-        return alert("Debe elegir el proveedor cuando el cheque aplica a un pago a proveedores");
+        return setErrorModal(
+          "Debe elegir el proveedor cuando el cheque aplica a un pago a proveedores",
+        );
     } else {
-      if (!form.recibidoDe.trim()) return alert('El campo "Recibido de" es obligatorio');
+      if (!form.recibidoDe.trim())
+        return setErrorModal('El campo "Recibido de" es obligatorio');
 
-      if (!form.fechaRecepcion) return alert("La fecha de recepción es obligatoria");
+      if (!form.fechaRecepcion)
+        return setErrorModal("La fecha de recepción es obligatoria");
     }
 
     const base: ChequeInput = {
@@ -420,9 +436,13 @@ export default function Cheques() {
 
       setShowModal(false);
 
+      setErrorModal(null);
+
       cargarDatos();
-    } catch (err: any) {
-      alert(err.message || "Error al guardar el cheque");
+    } catch (err) {
+      setErrorModal(
+        err instanceof Error ? err.message : "Error al guardar el cheque",
+      );
     }
   }
 
@@ -432,9 +452,15 @@ export default function Cheques() {
 
       setDeleteConfirm(null);
 
+      setError(null);
+
       cargarDatos();
-    } catch (err: any) {
-      alert(err.message || "Error al eliminar el cheque");
+    } catch (err) {
+      setDeleteConfirm(null);
+
+      setError(
+        err instanceof Error ? err.message : "Error al eliminar el cheque",
+      );
     }
   }
 
@@ -447,6 +473,14 @@ export default function Cheques() {
       breadcrumbs={[{ label: "Inicio", onClick: () => navigate("/") }, { label: "Cheques" }]}
     >
       <div className="p-[32px] flex flex-col gap-[24px]">
+        {error && (
+          <ErrorBanner
+            mensaje={error}
+            onReintentar={cargarDatos}
+            onCerrar={() => setError(null)}
+          />
+        )}
+
         {/* Title Row */}
         <div className="flex items-start justify-between">
           <div>
@@ -791,6 +825,13 @@ export default function Cheques() {
               </p>
             </div>
             <div className="px-[24px] py-[20px] flex flex-col gap-[16px]">
+              {errorModal && (
+                <ErrorBanner
+                  mensaje={errorModal}
+                  onCerrar={() => setErrorModal(null)}
+                />
+              )}
+
               {isEmitido ? (
                 <>
                   <div className="grid grid-cols-2 gap-[12px]">

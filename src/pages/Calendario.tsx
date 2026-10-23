@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import AppLayout from "@/layouts/AppLayout";
 
 import ClienteSelector from "@/components/ClienteSelector";
+import ErrorBanner from "@/components/ErrorBanner";
 
 import {
   getInstalaciones,
@@ -297,6 +298,8 @@ export default function Calendario() {
 
   const [cargando, setCargando] = useState(true);
 
+  const [errorCarga, setErrorCarga] = useState<string | null>(null);
+
   const [showInst, setShowInst] = useState(false);
 
   const [editInst, setEditInst] = useState<Instalacion | null>(null);
@@ -395,9 +398,15 @@ export default function Calendario() {
         setInstalaciones(inst);
 
         setVeredas(ver);
+
+        setErrorCarga(null);
       })
 
-      .catch(console.error)
+      .catch((e) =>
+        setErrorCarga(
+          e instanceof Error ? e.message : "No se pudo cargar el calendario",
+        ),
+      )
 
       .finally(() => {
         if (!cancelado) setCargando(false);
@@ -414,19 +423,31 @@ export default function Calendario() {
     getEquipos()
       .then(setEquipos)
 
-      .catch(console.error);
+      .catch((e) =>
+        setErrorCarga(
+          e instanceof Error ? e.message : "No se pudieron cargar los equipos",
+        ),
+      );
 
     getClientes()
       .then((data) =>
         setClientes(data.map((c) => ({ id: c.id as string, nombre: c.nombre as string }))),
       )
 
-      .catch(console.error);
+      .catch((e) =>
+        setErrorCarga(
+          e instanceof Error ? e.message : "No se pudieron cargar los clientes",
+        ),
+      );
 
     getVentasParaInstalacion()
       .then(setVentas)
 
-      .catch(console.error);
+      .catch((e) =>
+        setErrorCarga(
+          e instanceof Error ? e.message : "No se pudieron cargar las ventas",
+        ),
+      );
   }, []);
 
   async function recargar() {
@@ -442,8 +463,12 @@ export default function Calendario() {
       setVeredas(ver);
 
       setVentas(vts);
+
+      setErrorCarga(null);
     } catch (e) {
-      console.error(e);
+      setErrorCarga(
+        e instanceof Error ? e.message : "No se pudo actualizar el calendario",
+      );
     }
   }
 
@@ -453,7 +478,9 @@ export default function Calendario() {
 
       await recargar();
     } catch (e) {
-      console.error(e);
+      setErrorCarga(
+        e instanceof Error ? e.message : "No se pudieron actualizar los equipos",
+      );
     }
   }
 
@@ -772,7 +799,9 @@ export default function Calendario() {
       if (b.tipo === "equipo") await recargarEquipos();
       else await recargar();
     } catch (e) {
-      console.error(e);
+      setErrorCarga(
+        e instanceof Error ? e.message : "No se pudo eliminar el registro",
+      );
     }
   }
 
@@ -821,6 +850,14 @@ export default function Calendario() {
       breadcrumbs={[{ label: "Inicio", onClick: () => navigate("/") }, { label: "Calendario" }]}
     >
       <div className="p-[32px] flex flex-col gap-[24px]">
+        {errorCarga && (
+          <ErrorBanner
+            mensaje={errorCarga}
+            onReintentar={recargar}
+            onCerrar={() => setErrorCarga(null)}
+          />
+        )}
+
         {/* Title Row */}
         <div className="flex items-center justify-between">
           <div>

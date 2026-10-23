@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import AppLayout from "@/layouts/AppLayout";
 
 import { IconPlus, IconSearch } from "@/components/Icons";
+import ErrorBanner from "@/components/ErrorBanner";
 
 import { formatFechaLarga, toISODate } from "@/utils/fecha";
 import { formatMonto } from "@/utils/money";
@@ -243,6 +244,10 @@ export default function Caja() {
 
   const [loading, setLoading] = useState(true);
 
+  const [error, setError] = useState<string | null>(null);
+
+  const [errorModal, setErrorModal] = useState<string | null>(null);
+
   const [filtroSubCaja, setFiltroSubCaja] = useState("Todas");
 
   const [filtroTipo, setFiltroTipo] = useState("Todos");
@@ -316,7 +321,9 @@ export default function Caja() {
 
       return data;
     } catch (err) {
-      console.error(err);
+      setError(
+        err instanceof Error ? err.message : "Error al cargar las cajas",
+      );
 
       return [];
     }
@@ -339,8 +346,12 @@ export default function Caja() {
       setResumen(res);
 
       setCierres(cie);
+
+      setError(null);
     } catch (err) {
-      console.error(err);
+      setError(
+        err instanceof Error ? err.message : "Error al cargar los movimientos",
+      );
     } finally {
       setLoading(false);
     }
@@ -352,7 +363,7 @@ export default function Caja() {
 
       setBancos(data);
     } catch (err) {
-      console.error(err);
+      setError(err instanceof Error ? err.message : "Error al cargar los bancos");
     }
   }, []);
 
@@ -504,6 +515,8 @@ export default function Caja() {
       fecha: toISODate(new Date()),
     });
 
+    setErrorModal(null);
+
     setShowMovimientoModal(true);
   }
 
@@ -532,17 +545,19 @@ export default function Caja() {
       observaciones: m.observaciones || "",
     });
 
+    setErrorModal(null);
+
     setShowMovimientoModal(true);
   }
 
   async function handleGuardarMovimiento() {
     if (!form.concepto.trim()) {
-      alert("El concepto es obligatorio");
+      setErrorModal("El concepto es obligatorio");
       return;
     }
 
     if (!form.monto || Number(form.monto) <= 0) {
-      alert("El monto debe ser mayor a 0");
+      setErrorModal("El monto debe ser mayor a 0");
       return;
     }
 
@@ -579,7 +594,7 @@ export default function Caja() {
 
       cargarDatos();
     } catch (err: any) {
-      alert(err.message || "Error al guardar");
+      setErrorModal(err.message || "Error al guardar");
     }
   }
 
@@ -589,13 +604,16 @@ export default function Caja() {
       setDeleteConfirm(null);
       cargarDatos();
     } catch (err) {
-      console.error(err);
+      setDeleteConfirm(null);
+      setError(
+        err instanceof Error ? err.message : "Error al eliminar el movimiento",
+      );
     }
   }
 
   async function handleCerrarMes() {
     if (!cierreForm.saldoReal || Number(cierreForm.saldoReal) < 0) {
-      alert("Ingresá un saldo real válido");
+      setErrorModal("Ingresá un saldo real válido");
       return;
     }
 
@@ -624,7 +642,7 @@ export default function Caja() {
 
       cargarDatos();
     } catch (err: any) {
-      alert(err.message || "Error al cerrar");
+      setErrorModal(err.message || "Error al cerrar");
     } finally {
       setCierreLoading(false);
     }
@@ -639,6 +657,8 @@ export default function Caja() {
       orden: String(cajas.length + 1),
     });
 
+    setErrorModal(null);
+
     setShowCajaModal(true);
   }
 
@@ -647,12 +667,14 @@ export default function Caja() {
 
     setCajaForm({ nombre: c.nombre, color: c.color, orden: String(c.orden) });
 
+    setErrorModal(null);
+
     setShowCajaModal(true);
   }
 
   async function handleGuardarCaja() {
     if (!cajaForm.nombre.trim()) {
-      alert("El nombre es obligatorio");
+      setErrorModal("El nombre es obligatorio");
       return;
     }
 
@@ -684,7 +706,7 @@ export default function Caja() {
 
       cargarDatos();
     } catch (err: any) {
-      alert(err.message || "Error al guardar caja");
+      setErrorModal(err.message || "Error al guardar caja");
     }
   }
 
@@ -695,7 +717,8 @@ export default function Caja() {
       cargarCajas();
       cargarDatos();
     } catch (err: any) {
-      alert(err.message || "Error al eliminar caja");
+      setDeleteCajaConfirm(null);
+      setError(err.message || "Error al eliminar caja");
     }
   }
 
@@ -703,6 +726,8 @@ export default function Caja() {
     setEditingBanco(null);
 
     setBancoForm({ nombre: "" });
+
+    setErrorModal(null);
 
     setShowBancoModal(true);
   }
@@ -712,12 +737,14 @@ export default function Caja() {
 
     setBancoForm({ nombre: b.nombre });
 
+    setErrorModal(null);
+
     setShowBancoModal(true);
   }
 
   async function handleGuardarBanco() {
     if (!bancoForm.nombre.trim()) {
-      alert("El nombre es obligatorio");
+      setErrorModal("El nombre es obligatorio");
       return;
     }
 
@@ -729,7 +756,7 @@ export default function Caja() {
 
       cargarBancos();
     } catch (err: any) {
-      alert(err.message || "Error al guardar banco");
+      setErrorModal(err.message || "Error al guardar banco");
     }
   }
 
@@ -739,7 +766,8 @@ export default function Caja() {
       setDeleteBancoConfirm(null);
       cargarBancos();
     } catch (err: any) {
-      alert(err.message || "Error al eliminar banco");
+      setDeleteBancoConfirm(null);
+      setError(err.message || "Error al eliminar banco");
     }
   }
 
@@ -784,6 +812,14 @@ export default function Caja() {
   return (
     <AppLayout breadcrumbs={[{ label: "Inicio", onClick: () => navigate("/") }, { label: "Caja" }]}>
       <div className="p-[32px] flex flex-col gap-[24px]">
+        {error && (
+          <ErrorBanner
+            mensaje={error}
+            onReintentar={cargarDatos}
+            onCerrar={() => setError(null)}
+          />
+        )}
+
         {/* Title Row */}
         <div className="flex items-start justify-between">
           <div>
@@ -1518,6 +1554,7 @@ export default function Caja() {
                       subCaja: p.subCaja || cajaNombres[0] || "Efectivo",
                       fecha: toISODate(new Date()),
                     }));
+                    setErrorModal(null);
                     setShowCierreModal(true);
                   }}
                   className="flex items-center gap-[6px] bg-[#0ea5e9] hover:bg-[#0284c7] transition-colors text-white font-['Geist:SemiBold',sans-serif] font-semibold text-[12px] px-[10px] py-[6px] rounded-[6px]"
@@ -1584,6 +1621,12 @@ export default function Caja() {
               </p>
             </div>
             <div className="px-[24px] py-[20px] flex flex-col gap-[16px]">
+              {errorModal && (
+                <ErrorBanner
+                  mensaje={errorModal}
+                  onCerrar={() => setErrorModal(null)}
+                />
+              )}
               <div className="grid grid-cols-2 gap-[12px]">
                 <div>
                   <label className="font-['Geist:Medium',sans-serif] font-medium text-[#475569] text-[13px] mb-[6px] block">
@@ -1781,6 +1824,12 @@ export default function Caja() {
               </p>
             </div>
             <div className="px-[24px] py-[20px] flex flex-col gap-[16px]">
+              {errorModal && (
+                <ErrorBanner
+                  mensaje={errorModal}
+                  onCerrar={() => setErrorModal(null)}
+                />
+              )}
               <div className="grid grid-cols-2 gap-[12px]">
                 <div>
                   <label className="font-['Geist:Medium',sans-serif] font-medium text-[#475569] text-[13px] mb-[6px] block">
@@ -1960,6 +2009,12 @@ export default function Caja() {
               </p>
             </div>
             <div className="px-[24px] py-[20px] flex flex-col gap-[16px]">
+              {errorModal && (
+                <ErrorBanner
+                  mensaje={errorModal}
+                  onCerrar={() => setErrorModal(null)}
+                />
+              )}
               <div>
                 <label className="font-['Geist:Medium',sans-serif] font-medium text-[#475569] text-[13px] mb-[6px] block">
                   Nombre
@@ -2083,6 +2138,12 @@ export default function Caja() {
               </p>
             </div>
             <div className="px-[24px] py-[20px] flex flex-col gap-[16px]">
+              {errorModal && (
+                <ErrorBanner
+                  mensaje={errorModal}
+                  onCerrar={() => setErrorModal(null)}
+                />
+              )}
               <div>
                 <label className="font-['Geist:Medium',sans-serif] font-medium text-[#475569] text-[13px] mb-[6px] block">
                   Nombre

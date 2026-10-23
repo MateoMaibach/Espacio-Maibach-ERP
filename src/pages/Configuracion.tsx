@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import ErrorBanner from "@/components/ErrorBanner";
+
 import { IconChevronRight, IconPlus } from "@/components/Icons";
 import AppLayout from "@/layouts/AppLayout";
 import {
@@ -178,8 +180,8 @@ export default function Configuracion() {
           </div>
 
           {error && (
-            <div className="mt-3 rounded-lg bg-[#fef2f2] p-2.5">
-              <p className="text-[12px] text-[#b91c1c]">{error}</p>
+            <div className="mt-3">
+              <ErrorBanner mensaje={error} onCerrar={() => setError(null)} />
             </div>
           )}
 

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AppLayout from "@/layouts/AppLayout";
 import { IconSearch, IconPlus } from "@/components/Icons";
+import ErrorBanner from "@/components/ErrorBanner";
 import { getProveedores, deleteProveedor, type Proveedor } from "@/services/api";
 import ProveedorFormModal from "@/components/ProveedorFormModal";
 import { formatMonto } from "@/utils/money";
@@ -26,6 +27,7 @@ export default function Proveedores() {
   const navigate = useNavigate();
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [rubro, setRubro] = useState("Todos");
   const [estado, setEstado] = useState("Todos");
@@ -37,9 +39,11 @@ export default function Proveedores() {
     setLoading(true);
     try {
       setProveedores(await getProveedores());
+      setError(null);
     } catch (err) {
-      console.error(err);
-      alert("Error al cargar los proveedores");
+      setError(
+        err instanceof Error ? err.message : "Error al cargar los proveedores",
+      );
     } finally {
       setLoading(false);
     }
@@ -96,7 +100,10 @@ export default function Proveedores() {
       setProveedores((prev) => prev.filter((p) => p.id !== deleting.id));
       setDeleting(null);
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Error al eliminar el proveedor");
+      setDeleting(null);
+      setError(
+        err instanceof Error ? err.message : "Error al eliminar el proveedor",
+      );
     }
   }
 
@@ -105,6 +112,14 @@ export default function Proveedores() {
       breadcrumbs={[{ label: "Inicio", onClick: () => navigate("/") }, { label: "Proveedores" }]}
     >
       <div className="p-[32px] flex flex-col gap-[24px]">
+        {error && (
+          <ErrorBanner
+            mensaje={error}
+            onReintentar={cargarDatos}
+            onCerrar={() => setError(null)}
+          />
+        )}
+
         {/* Title Row */}
         <div className="flex items-start justify-between">
           <div>

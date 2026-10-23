@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AppLayout from "@/layouts/AppLayout";
 import { IconSearch, IconPlus } from "@/components/Icons";
+import ErrorBanner from "@/components/ErrorBanner";
 import {
   getArticulos,
   getDepositos,
@@ -58,6 +59,7 @@ export default function Stock() {
   const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>("existencias");
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const [depositos, setDepositos] = useState<Deposito[]>([]);
   const [articulos, setArticulos] = useState<Articulo[]>([]);
@@ -113,8 +115,9 @@ export default function Stock() {
       setDepositos(deps);
       setArticulos(arts);
     } catch (err) {
-      console.error(err);
-      alert("Error al cargar los datos de stock");
+      setError(
+        err instanceof Error ? err.message : "Error al cargar los datos de stock",
+      );
     }
   }, []);
 
@@ -125,8 +128,9 @@ export default function Stock() {
       setValorTotal(res.valorTotal);
       setConNegativo(res.conStockNegativo);
     } catch (err) {
-      console.error(err);
-      alert("Error al cargar las existencias");
+      setError(
+        err instanceof Error ? err.message : "Error al cargar las existencias",
+      );
     }
   }, [filtroDeposito]);
 
@@ -141,8 +145,9 @@ export default function Stock() {
         }),
       );
     } catch (err) {
-      console.error(err);
-      alert("Error al cargar los movimientos");
+      setError(
+        err instanceof Error ? err.message : "Error al cargar los movimientos",
+      );
     }
   }, [filtroDeposito, filtroTipo, filtroDesde, filtroHasta]);
 
@@ -165,8 +170,9 @@ export default function Stock() {
         })),
       );
     } catch (err) {
-      console.error(err);
-      alert("Error al cargar los reportes");
+      setError(
+        err instanceof Error ? err.message : "Error al cargar los reportes",
+      );
     }
   }, []);
 
@@ -190,6 +196,8 @@ export default function Stock() {
   }, [tab, loading, cargarExistencias, cargarMovimientos, cargarReportes]);
 
   async function refrescarTodo() {
+    setError(null);
+
     await cargarBase();
     if (tab === "existencias") await cargarExistencias();
     if (tab === "movimientos") await cargarMovimientos();
@@ -204,7 +212,7 @@ export default function Stock() {
       setEliminando(null);
       await refrescarTodo();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Error al eliminar");
+      setError(err instanceof Error ? err.message : "Error al eliminar");
     }
   }
 
@@ -234,6 +242,14 @@ export default function Stock() {
       breadcrumbs={[{ label: "Inicio", onClick: () => navigate("/") }, { label: "Stock" }]}
     >
       <div className="p-[32px] flex flex-col gap-[24px]">
+        {error && (
+          <ErrorBanner
+            mensaje={error}
+            onReintentar={refrescarTodo}
+            onCerrar={() => setError(null)}
+          />
+        )}
+
         <div className="flex items-start justify-between">
           <div>
             <p className="font-['Geist:Bold',sans-serif] font-bold text-[#0f172a] text-[24px]">
