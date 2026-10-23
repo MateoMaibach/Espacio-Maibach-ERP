@@ -104,13 +104,31 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   // Editar un mes cerrado es un conflicto de dominio, no una falla interna.
   const esMesCerrado = err.name === "MesCerradoError"
 
-  if (!esMesCerrado) console.error(err)
+  /**
+   * Violación de un UNIQUE.
+   *
+   * Los controllers validan duplicados en código, pero esa validación es
+   * "leer y comparar": dos pedidos simultáneos pueden pasar los dos y el
+   * segundo revienta contra el índice. Sin esto, eso se traducía en un 500
+   * opaco de SQLite. Es un conflicto de estado, no una falla: 409.
+   */
+  const esUnico = (err as { code?: string }).code === "SQLITE_CONSTRAINT_UNIQUE"
+
+  if (!esMesCerrado && !esUnico) console.error(err)
 
   // Los errores de express.json() (body malformado) traen su propio status.
 
-  const status = esMesCerrado ? 409 : ((err as { status?: number }).status ?? 500)
+  const status = esMesCerrado
+    ? 409
+    : esUnico
+      ? 409
+      : ((err as { status?: number }).status ?? 500)
 
-  res.status(status).json({ error: err.message || "Error interno del servidor" })
+  const mensaje = esUnico
+    ? "Ese valor ya existe (violación de unicidad)"
+    : err.message || "Error interno del servidor"
+
+  res.status(status).json({ error: mensaje })
 })
 
 app.listen(PORT, () => {

@@ -11,6 +11,7 @@ import { eq, desc } from "drizzle-orm"
 import {
   calcularSnapshot,
   obtenerPeriodo,
+  desviosDePeriodo,
   type Snapshot,
 } from "../services/periodos.service.js"
 
@@ -24,6 +25,10 @@ function parseJson<T>(raw: unknown): T | null {
   } catch {
     return null
   }
+}
+
+function parseSnapshot(raw: string): Snapshot | null {
+  return parseJson<Snapshot>(raw)
 }
 
 function leerParametros(req: Request) {
@@ -69,7 +74,14 @@ export function getByPeriodo(req: Request, res: Response) {
     return
   }
 
-  res.json({ ...periodo, snapshot: parseJson<Snapshot>(periodo.snapshot) })
+  const desvios = desviosDePeriodo(periodo.id)
+
+  res.json({
+    ...periodo,
+    snapshot: parseJson<Snapshot>(periodo.snapshot),
+    desviaciones: desvios,
+    desfasado: desvios.length > 0,
+  })
 }
 
 /**
@@ -92,6 +104,21 @@ export function cerrar(req: Request, res: Response) {
   if (existente?.estado === "cerrado") {
     res.status(409).json({
       error: `El mes ${mes}/${anio} ya está cerrado. Reabrilo si necesitás volver a cerrarlo.`,
+    })
+
+    return
+  }
+
+  /**
+   * No tiene sentido cerrar un mes que todavia no ocurrio: el snapshot queda
+   * congelado con los datos parciales del mes en curso, y cuando el mes
+   * termine nadie lo vuelve a cerrar porque ya figura como cerrado.
+   */
+  const hoy = new Date()
+
+  if (anio > hoy.getFullYear() || (anio === hoy.getFullYear() && mes > hoy.getMonth() + 1)) {
+    res.status(400).json({
+      error: `No se puede cerrar ${mes}/${anio}: ese mes todavía no ocurrió.`,
     })
 
     return
@@ -172,6 +199,36 @@ export function abrir(req: Request, res: Response) {
     return
   }
 
+  /**
+   * Abrir no revierte nada: solo baja el flag. Si quedan meses posteriores
+   * cerrados, el resultado es un ledger donde un mes abierto tiene meses
+   * cerrados encima, y no se sabe cual de los dosSnapshot es el bueno.
+   */
+  const posteriores = db
+    .select()
+    .from(periodos)
+    .all()
+    .filter(
+      p =>
+        p.estado === "cerrado" &&
+        (p.anio > anio || (p.anio === anio && p.mes > mes)),
+    )
+
+  if (posteriores.length > 0) {
+    const lista = posteriores
+      .map(p => `${p.mes}/${p.anio}`)
+      .sort()
+      .join(", ")
+
+    res.status(409).json({
+      error:
+        `No se puede abrir ${mes}/${anio}: hay meses posteriores cerrados (${lista}). ` +
+        `Reabrilos en orden inverso, empezando por ${lista.split(", ").pop()?.trim()}.`,
+    })
+
+    return
+  }
+
   db.update(periodos)
     .set({
       estado: "abierto",
@@ -184,7 +241,17 @@ export function abrir(req: Request, res: Response) {
   res.json({ ok: true })
 }
 
-/** Compara un mes contra su snapshot para ver si los datos cambiaron. */
+/**
+ * Compara el estado actual de un mes contra su snapshot guardado.
+ *
+ * El comentario de arriba prometía esta comparación desde antes, pero el
+ * código solo recalculaba y devolvía el estado actual: no decía si el
+ * período cerrado seguía reflejando la realidad. Como varias tablas que
+ * alimentan el snapshot (compras, remitos, stock, cuotas, cheques) no están
+ * congeladas, ese desfase es real y hay que verlo.
+ *
+ * `generadoEn` se excluye de la comparación porque cambia en cada corrida.
+ */
 export function preview(req: Request, res: Response) {
   const params = leerParametros(req)
 
@@ -196,5 +263,55 @@ export function preview(req: Request, res: Response) {
 
   const actual = calcularSnapshot(params.mes, params.anio)
 
-  res.json(actual)
+  const periodo = obtenerPeriodo(params.mes, params.anio)
+
+  const guardado = periodo?.snapshot ? parseSnapshot(periodo.snapshot) : null
+
+  if (!guardado) {
+    return res.json({ ...actual, desfasado: false, diferencias: [] })
+  }
+
+  const diferencias: {
+    campo: string
+    guardado: unknown
+    actual: unknown
+  }[] = []
+
+  const recorrer = (a: unknown, b: unknown, prefijo: string) => {
+    if (typeof a === "number" && typeof b === "number") {
+      if (a !== b) {
+        diferencias.push({
+          campo: prefijo,
+          guardado: a,
+          actual: b,
+        })
+      }
+
+      return
+    }
+
+    if (a && b && typeof a === "object" && typeof b === "object") {
+      for (const clave of new Set([
+        ...Object.keys(a as object),
+        ...Object.keys(b as object),
+      ])) {
+        const va = (a as Record<string, unknown>)[clave]
+
+        const vb = (b as Record<string, unknown>)[clave]
+
+        if (clave === "generadoEn") continue
+
+        recorrer(va, vb, prefijo ? `${prefijo}.${clave}` : clave)
+      }
+    }
+  }
+
+  recorrer(guardado, actual, "")
+
+  res.json({
+    ...actual,
+    desfasado: diferencias.length > 0,
+    diferencias,
+    snapshotGuardadoEn: guardado.generadoEn ?? null,
+  })
 }
