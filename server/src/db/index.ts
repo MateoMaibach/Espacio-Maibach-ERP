@@ -26,6 +26,11 @@ sqlite.pragma("journal_mode = WAL")
 
 sqlite.pragma("foreign_keys = ON")
 
+// better-sqlite3 lanza SQLITE_BUSY al instante en vez de esperar. Sin esto,
+// el server de desarrollo (3001), el de pruebas (3002) y un script de
+// migracion abiertos sobre el mismo archivo se pisan entre si.
+sqlite.pragma("busy_timeout = 5000")
+
 export const db = drizzle(sqlite, { schema })
 
 export { sqlite }
@@ -141,6 +146,30 @@ sqlite.exec(`
 
   CREATE UNIQUE INDEX IF NOT EXISTS periodos_mes_anio_uq
     ON periodos (mes, anio);
+
+  -- Escrituras que cayeron en un periodo cerrado.
+  --
+  -- Decision de producto: el cierre de mes congela SOLO movimientos y
+  -- ficheros (donde esta assertMesAbierto). Compras, remitos, stock,
+  -- cuotas, cheques y ordenes de pago siguen admitiendo escrituras, porque
+  -- frenar una compra que se registra con atraso bloquearia el trabajo real.
+  --
+  -- Lo que no se permite es que eso pase inadvertido: cada escritura en un
+  -- periodo cerrado se anota aca, y Finanzas puede ver que el snapshot ya no
+  -- describe la realidad.
+  CREATE TABLE IF NOT EXISTS periodos_desvios (
+    id TEXT PRIMARY KEY,
+    periodo_id TEXT NOT NULL,
+    tabla TEXT NOT NULL,
+    operacion TEXT NOT NULL,
+    entidad_id TEXT,
+    fecha TEXT NOT NULL,
+    detalle TEXT,
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS periodos_desvios_periodo
+    ON periodos_desvios (periodo_id);
 
   CREATE TABLE IF NOT EXISTS categorias (
     id TEXT PRIMARY KEY,
@@ -333,6 +362,27 @@ sqlite.exec(`
     referencia_id TEXT,
     created_at INTEGER NOT NULL
   );
+
+  -- Backstops de unicidad.
+  --
+  -- Los controllers chequean duplicados en código, pero eso es "leer y
+  -- comparar": dos pedidos simultáneos pasan los dos y el segundo rompe algo.
+  -- estos índices son la red de seguridad. El cálculo de numero (max+1) queda
+  -- fuera de transaccion, así que sin indice la numeración puede repetirse.
+  --
+  -- articulos.codigo y cajas.nombre son índices PARCIALES: null no
+  -- compite con null, asi que varios artículos sin código conviven.
+  CREATE UNIQUE INDEX IF NOT EXISTS remitos_numero_uq
+    ON remitos (numero);
+  CREATE UNIQUE INDEX IF NOT EXISTS ordenes_pago_numero_uq
+    ON ordenes_pago (numero);
+  CREATE UNIQUE INDEX IF NOT EXISTS cuotas_fichero_nro_uq
+    ON cuotas (fichero_id, nro_cuota);
+  CREATE UNIQUE INDEX IF NOT EXISTS cajas_nombre_uq
+    ON cajas (nombre);
+  CREATE UNIQUE INDEX IF NOT EXISTS articulos_codigo_uq
+    ON articulos (codigo)
+    WHERE codigo IS NOT NULL;
 `)
 
 // Migration: add pago a proveedor columns to cheques if missing

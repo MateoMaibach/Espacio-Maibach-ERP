@@ -220,6 +220,31 @@ export const periodos = sqliteTable(
 );
 
 /**
+ * Escrituras que cayeron en un periodo ya cerrado.
+ *
+ * El cierre congela `movimientos` y `ficheros` (ver `assertMesAbierto`). Las
+ * demas tablas que alimentan el snapshot siguen admitiendo escritura, asi que
+ * cada vez que eso pasa queda anotado aca. No bloquea nada: deja rastro.
+ */
+export const periodosDesvios = sqliteTable("periodos_desvios", {
+  id: text("id").primaryKey(),
+
+  periodoId: text("periodo_id").notNull(),
+
+  tabla: text("tabla").notNull(),
+
+  operacion: text("operacion").notNull(),
+
+  entidadId: text("entidad_id"),
+
+  fecha: text("fecha").notNull(),
+
+  detalle: text("detalle"),
+
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+});
+
+/**
  * Un mes cerrado congela una foto de las cifras y bloquea editar los datos
  * que la componían. El snapshot queda en `periodos.snapshot` como JSON.
  */
