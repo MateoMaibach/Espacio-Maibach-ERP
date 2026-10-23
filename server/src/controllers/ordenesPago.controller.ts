@@ -16,7 +16,8 @@ import {
 import { eq, desc, sql } from "drizzle-orm"
 import { contarPagos } from "./compras.controller.js"
 
-const FECHA_REGEX = /^\d{4}-\d{2}-\d{2}$/
+import { FECHA_REGEX } from "../utils/fecha.js"
+
 
 export interface DetalleLinea {
   subCaja: string
@@ -349,8 +350,18 @@ export function create(req: Request, res: Response) {
 
       validDetalles.value.forEach((linea) => {
         const movId = idUnico("mov")
+
+        /**
+         * `tx.select()`, no `db.select()`.
+         *
+         * Leer con `db` dentro del callback abre una lectura fuera de la
+         * transaccion: el cheque validado antes de abrirla pudo cambiar de
+         * estado entre esa validacion y el commit, y se aplicaria el rollback
+         * sobre un estado viejo. Con `tx` la lectura ve el mismo snapshot que
+         * el resto de la escritura.
+         */
         const cheque = linea.chequeId
-          ? db
+          ? tx
               .select()
               .from(cheques)
               .where(eq(cheques.id, linea.chequeId))
@@ -441,7 +452,9 @@ export function anular(req: Request, res: Response) {
     return
   }
   if (existing.estado !== "Pagada") {
-    res.status(400).json({ error: "La orden ya está anulada" })
+    // 409 y no 400: el recurso existe y está en otro estado, no es un body
+    // inválido. Es el mismo criterio que usa el anular de remitos.
+    res.status(409).json({ error: "La orden ya está anulada" })
     return
   }
 
