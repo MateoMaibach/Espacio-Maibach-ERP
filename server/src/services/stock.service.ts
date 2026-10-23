@@ -72,11 +72,18 @@ export function aplicarStock(
     .run()
 }
 
+/**
+ * `anulacion` es un tipo de movimiento, no un borrado.
+ *
+ * Cuando se anula un remito no se borra la fila original: se agrega un
+ * movimiento de tipo `anulacion` con el mismo `referenciaId`. Asi el kardex
+ * muestra la salida y su compensating, en vez de fingir que nunca ocurrio.
+ */
 export function crearMovimiento(
   tx: Tx,
   params: {
     fecha: string
-    tipo: "ingreso" | "egreso" | "transferencia" | "ajuste"
+    tipo: "ingreso" | "egreso" | "transferencia" | "ajuste" | "anulacion"
     articuloId: string
     depositoOrigenId?: string | null
     depositoDestinoId?: string | null

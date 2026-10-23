@@ -8,9 +8,10 @@ import { veredas, clientes, equipos } from "../db/schema.js"
 
 import { eq, and, gte, lte, desc } from "drizzle-orm"
 
+import { FECHA_REGEX } from "../utils/fecha.js"
+
 const ESTADOS = ["Pendiente", "En Proceso", "Completada"]
 
-const FECHA_REGEX = /^\d{4}-\d{2}-\d{2}$/
 
 function validarFecha(fecha: unknown): string | null {
   if (fecha === undefined || fecha === null || String(fecha) === "")
@@ -215,18 +216,35 @@ export function update(req: Request, res: Response) {
     return
   }
 
-  db.update(veredas)
-    .set({
-      ...(clienteId !== undefined && { clienteId: String(clienteId) }),
+  const cambios = {
+    ...(clienteId !== undefined && { clienteId: String(clienteId) }),
 
-      ...(fecha !== undefined && { fecha: String(fecha) }),
+    ...(fecha !== undefined && { fecha: String(fecha) }),
 
-      ...(equipoId !== undefined && { equipoId: equipoId || null }),
+    ...(equipoId !== undefined && { equipoId: equipoId || null }),
 
-      ...(estado !== undefined && { estado }),
+    ...(estado !== undefined && { estado }),
 
-      ...(notas !== undefined && { notas: notas ? String(notas) : null }),
+    ...(notas !== undefined && { notas: notas ? String(notas) : null }),
+  }
+
+  /**
+   * Un `set({})` vacio hace que Drizzle lance "No values to set", y eso salia
+   * como 500. Pasa cuando se manda un body sin ninguno de los campos que este
+   * handler conoce.
+   */
+  if (Object.keys(cambios).length === 0) {
+    res.status(400).json({
+      error:
+        `No se envio ningun campo para actualizar. ` +
+        `Los campos editables son: clienteId, fecha, equipoId, estado, notas.`,
     })
+
+    return
+  }
+
+  db.update(veredas)
+    .set(cambios)
     .where(eq(veredas.id, req.params.id as string))
     .run()
 
