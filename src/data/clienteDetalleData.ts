@@ -504,6 +504,34 @@ export function getCurrentDate(): string {
   return `${day}/${month}/${year}`;
 }
 
+/**
+ * DD/MM/YYYY (o YYYY-MM-DD) -> YYYY-MM-DD, que es lo que espera la API.
+ *
+ * Devuelve null si no se puede interpretar, para que el caller no mande una
+ * fecha basura que el servidor iba a rechazar.
+ */
+export function parsearFechaCobro(value: string): string | null {
+  const limpio = value.trim();
+
+  if (!limpio) return null;
+
+  const iso = limpio.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+  if (iso) return limpio;
+
+  const dmy = limpio.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+
+  if (dmy) {
+    const [, d, m, y] = dmy;
+
+    if (!d || !m || !y) return null;
+
+    return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  }
+
+  return null;
+}
+
 export function getFicheroResumen(items: FicheroItem[]): string {
   const descs = items.filter((i) => i.desc.trim()).map((i) => i.desc.trim());
 

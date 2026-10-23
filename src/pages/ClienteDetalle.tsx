@@ -10,6 +10,7 @@ import {
   formatCurrency,
   parseCurrencyInput,
   getCurrentDate,
+  parsearFechaCobro,
   type FicheroItem,
   type FicheroForm,
 } from "@/data/clienteDetalleData";
@@ -28,6 +29,8 @@ import {
   deleteFichero,
   getProveedores,
   type Proveedor,
+  getCajas,
+  type CajaItem,
 } from "@/services/api";
 
 import LocalidadSelector from "@/components/LocalidadSelector";
@@ -155,10 +158,21 @@ function mapFichero(raw: any, cuotasRaw: any[]): FicheroData {
     /* ok */
   }
 
+  /**
+   * `Number("$1.950.000")` es NaN, no 1950000. Por eso los montos que llegan
+   * como texto formateado hay que pasarlos por `parseCurrencyInput` y no por
+   * `num`: con `num`, la venta y el margen colapsaban a 0 en silencio.
+   */
   const num = (v: unknown) => {
     const n = Number(v);
 
     return Number.isFinite(n) ? n : 0;
+  };
+
+  const monto = (v: unknown) => {
+    if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+
+    return parseCurrencyInput(String(v ?? ""));
   };
 
   return {
@@ -186,7 +200,7 @@ function mapFichero(raw: any, cuotasRaw: any[]): FicheroData {
 
     proveedor: raw.proveedor ?? null,
 
-    venta: num(raw.venta ?? raw.total),
+    venta: monto(raw.venta ?? raw.total),
 
     comisionMonto: num(raw.comisionMonto),
 
@@ -263,6 +277,15 @@ export default function ClienteDetalle() {
           prev.proveedorPiscina ? prev : { ...prev, proveedorPiscina: data[0]?.id ?? "" },
         );
       })
+
+      .catch(console.error);
+  }, []);
+
+  const [cajas, setCajas] = useState<CajaItem[]>([]);
+
+  useEffect(() => {
+    getCajas()
+      .then((data) => setCajas(data.filter((c) => c.activa === 1)))
 
       .catch(console.error);
   }, []);
@@ -354,6 +377,7 @@ export default function ClienteDetalle() {
     fecha: getCurrentDate(),
     monto: "",
     metodo: "Transferencia",
+    subCaja: "Efectivo",
     comprobante: "",
     observaciones: "",
   });
@@ -751,6 +775,7 @@ export default function ClienteDetalle() {
       fecha: getCurrentDate(),
       monto: String(saldoCuota),
       metodo: "Transferencia",
+      subCaja: cobroForm.subCaja || "Efectivo",
       comprobante: "",
       observaciones: "",
     });
@@ -765,7 +790,9 @@ export default function ClienteDetalle() {
 
     const errors: Record<string, string> = {};
 
-    if (!cobroForm.fecha.trim()) errors.fecha = "Requerido";
+    const fechaIso = parsearFechaCobro(cobroForm.fecha);
+
+    if (!fechaIso) errors.fecha = "Fecha inválida (dd/mm/aaaa)";
 
     const monto = parseCurrencyInput(cobroForm.monto);
 
@@ -790,6 +817,14 @@ export default function ClienteDetalle() {
         comprobante: cobroForm.comprobante,
 
         observaciones: cobroForm.observaciones,
+
+        // Antes se pedia en el modal y nunca se mandaba: el server sellaba
+        // siempre la fecha de hoy.
+        fecha: fechaIso ?? undefined,
+
+        // El cobro genera un ingreso de caja, asi que hay que saber en que
+        // sub-caja entra el efectivo.
+        subCaja: cobroForm.subCaja,
       });
 
       reloadCliente();
@@ -802,6 +837,7 @@ export default function ClienteDetalle() {
         fecha: getCurrentDate(),
         monto: "",
         metodo: "Transferencia",
+        subCaja: "Efectivo",
         comprobante: "",
         observaciones: "",
       });
@@ -2508,6 +2544,26 @@ function handleOpenEditarFichero() {
                 {cobroErrors.metodo && (
                   <p className="text-[#ef4444] text-[12px] mt-[4px]">{cobroErrors.metodo}</p>
                 )}
+              </div>
+              <div>
+                <label className="font-['Geist:Medium',sans-serif] font-medium text-[#475569] text-[13px] mb-[6px] block">
+                  Caja de destino *
+                </label>
+                <select
+                  value={cobroForm.subCaja}
+                  onChange={(e) => setCobroForm((p) => ({ ...p, subCaja: e.target.value }))}
+                  className={cobroInputClass("cobroSubCaja")}
+                  style={{ border: "1px solid #e2e8f0" }}
+                >
+                  {cajas.map((c) => (
+                    <option key={c.id} value={c.nombre}>
+                      {c.nombre}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[#94a3b8] text-[11px] mt-[4px]">
+                  El cobro genera un ingreso en esta caja.
+                </p>
               </div>
               <div>
                 <label className="font-['Geist:Medium',sans-serif] font-medium text-[#475569] text-[13px] mb-[6px] block">

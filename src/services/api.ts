@@ -55,7 +55,21 @@ export function createCliente(data: {
   });
 }
 
-export function updateCliente(id: string, data: Record<string, any>) {
+export interface ClienteUpdate {
+  nombre?: string;
+  cuit?: string | null;
+  email?: string | null;
+  telefono?: string | null;
+  direccion?: string | null;
+  localidad?: string | null;
+  dni?: string | null;
+  estado?: string;
+  vendedor?: string;
+  metodoPago?: string | null;
+  notas?: string | null;
+}
+
+export function updateCliente(id: string, data: ClienteUpdate) {
   return request<{ ok: true }>(`/clientes/${id}`, {
     method: "PUT",
     body: JSON.stringify(data),
@@ -151,7 +165,22 @@ export function agregarCargo(
   });
 }
 
-export function editarCuota(clienteId: string, cuotaId: string, data: Record<string, any>) {
+export interface CuotaUpdate {
+  fechaVencimiento?: string;
+
+  /**
+   * El nombre del campo que espera el servidor. Antes se mandaba `monto` y el
+   * controller destructuraba `monto`, asi que editar el importe era un
+   * no-op silencioso.
+   */
+  montoPlanificado?: number;
+  descripcion?: string | null;
+  metodo?: string | null;
+  comprobante?: string | null;
+  observaciones?: string | null;
+}
+
+export function editarCuota(clienteId: string, cuotaId: string, data: CuotaUpdate) {
   return request<{ ok: true }>(`/clientes/${clienteId}/fichero/cuotas/${cuotaId}`, {
     method: "PUT",
     body: JSON.stringify(data),
@@ -166,16 +195,24 @@ export function registrarCobro(
     metodo?: string;
     comprobante?: string;
     observaciones?: string;
+
+    /** El modal la pide desde siempre pero nunca se enviaba. */
+    fecha?: string;
+
+    /** Caja donde entra el efectivo. Si no se manda, el server usa Efectivo. */
+    subCaja?: string;
   },
 ) {
-  return request<{ ok: true; nuevoEstado: string; montoPagado: number }>(
-    `/clientes/${clienteId}/fichero/cuotas/${cuotaId}/cobrar`,
-    {
-      method: "POST",
+  return request<{
+    ok: true;
+    nuevoEstado: string;
+    montoPagado: number;
+    movimientoId: string;
+  }>(`/clientes/${clienteId}/fichero/cuotas/${cuotaId}/cobrar`, {
+    method: "POST",
 
-      body: JSON.stringify(data),
-    },
-  );
+    body: JSON.stringify(data),
+  });
 }
 
 export function eliminarCuota(clienteId: string, cuotaId: string) {
@@ -264,34 +301,27 @@ export function getMovimientos(mes: number, anio: number, subCaja?: string) {
   return request<Movimiento[]>(`/caja/movimientos?${params}`);
 }
 
-export function createMovimiento(data: {
+export interface MovimientoInput {
   fecha?: string;
-
   concepto: string;
-
   monto: number;
-
   tipo: "ingreso" | "egreso";
-
   subCaja: string;
-
   moneda?: string;
-
-  tipoCambio?: number;
-
+  tipoCambio?: number | null;
   categoria?: string | null;
+  comprobante?: string | null;
+  observaciones?: string | null;
+}
 
-  comprobante?: string;
-
-  observaciones?: string;
-}) {
+export function createMovimiento(data: MovimientoInput) {
   return request<{ ok: true; id: string }>("/caja/movimientos", {
     method: "POST",
     body: JSON.stringify(data),
   });
 }
 
-export function updateMovimiento(id: string, data: Record<string, any>) {
+export function updateMovimiento(id: string, data: Partial<MovimientoInput>) {
   return request<{ ok: true }>(`/caja/movimientos/${id}`, {
     method: "PUT",
     body: JSON.stringify(data),
@@ -363,7 +393,20 @@ export function createCaja(data: { nombre: string; color: string; orden?: number
   });
 }
 
-export function updateCaja(id: string, data: Record<string, any>) {
+export interface CajaUpdate {
+  nombre?: string;
+  color?: string;
+  orden?: number;
+
+  /**
+   * 0 o 1. La columna es un flag entero y Caja.tsx compara con `=== 1`,
+   * asi que mandarle un booleano dejaria la caja siempre activa.
+   */
+  activa?: 0 | 1;
+  afectaGeneral?: 0 | 1;
+}
+
+export function updateCaja(id: string, data: CajaUpdate) {
   return request<{ ok: true }>(`/cajas/${id}`, {
     method: "PUT",
     body: JSON.stringify(data),
@@ -1235,12 +1278,20 @@ export interface Existencia {
   valor: number;
 }
 
+export type TipoMovimientoStock =
+  | "ingreso"
+  | "egreso"
+  | "transferencia"
+  | "ajuste"
+  /** Compensación de un remito anulado. No borra la salida: la deja visible. */
+  | "anulacion";
+
 export interface MovimientoStock {
   id: string;
 
   fecha: string;
 
-  tipo: "ingreso" | "egreso" | "transferencia" | "ajuste";
+  tipo: TipoMovimientoStock;
 
   articuloId: string;
 

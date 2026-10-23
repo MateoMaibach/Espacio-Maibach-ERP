@@ -37,6 +37,9 @@ const tipoStyle: Record<string, { bg: string; color: string }> = {
   egreso: { bg: "#fee2e2", color: "#ef4444" },
   transferencia: { bg: "#e0f2fe", color: "#0284c7" },
   ajuste: { bg: "#fef3c7", color: "#f59e0b" },
+  // La anulación de un remito no borra el movimiento: deja una compensación
+  // de este tipo, para que el kardex muestre la salida y su reversa.
+  anulacion: { bg: "#e2e8f0", color: "#64748b" },
 };
 
 const depEstadoStyle: Record<string, { bg: string; color: string }> = {
@@ -683,6 +686,7 @@ export default function Stock() {
                     <option value="egreso">Egreso</option>
                     <option value="transferencia">Transferencia</option>
                     <option value="ajuste">Ajuste</option>
+                    <option value="anulacion">Anulación</option>
                   </select>
                 </div>
 
