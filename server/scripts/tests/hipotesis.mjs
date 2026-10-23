@@ -1908,3 +1908,128 @@ test(
   },
   { sev: "ALTA", ref: "cajas.controller.ts:update", nota: "sub_caja es texto libre sin FK" },
 )
+
+test(
+  "K1",
+  "renombrar una categoria arrastra sus movimientos",
+  async ctx => {
+    const viejo = `Cat K1 ${uid()}`
+
+    const { id } = await mkCategoria("ingreso", { nombre: viejo })
+
+    const movId = await mkMovimiento({ categoria: viejo, tipo: "ingreso" })
+
+    const nuevo = `${viejo} renombrada`
+
+    ctx.eq((await PUT(`/api/categorias/${id}`, { nombre: nuevo })).status, 200, "PUT categoria")
+
+    const mov = await must(await GET(`/api/caja/movimientos/${movId}`), "GET movimiento")
+
+    ctx.eq(
+      mov.categoria,
+      nuevo,
+      `el movimiento quedo con "${mov.categoria}": movimientos.categoria guarda el NOMBRE, sin FK`,
+    )
+
+    // Si la cascada no ocurrio, el DELETE ve 0 usos y borra la categoria.
+    ctx.eq((await DEL(`/api/categorias/${id}`)).status, 409, "la categoria renombrada sigue en uso")
+
+    await drop(`/api/caja/movimientos/${movId}`)
+    await drop(`/api/categorias/${id}`)
+  },
+  { sev: "ALTA", ref: "categorias.controller.ts:update", nota: "categoria es texto libre sin FK" },
+)
+
+test(
+  "K2",
+  "las categorias inactivas se pueden volver a activar",
+  async ctx => {
+    const { id } = await mkCategoria("egreso")
+
+    ctx.eq((await PUT(`/api/categorias/${id}`, { activa: 0 })).status, 200, "desactivar")
+
+    const activas = await must(await GET("/api/categorias?tipo=egreso"), "GET activas")
+    ctx.ok(!activas.some(c => c.id === id), "la inactiva no aparece sin incluirInactivas")
+
+    const todas = await must(
+      await GET("/api/categorias?tipo=egreso&incluirInactivas=1"),
+      "GET todas",
+    )
+
+    const inactiva = todas.find(c => c.id === id)
+
+    ctx.ok(inactiva, "sin incluirInactivas=1 el panel no puede reactivarla")
+    ctx.eq(inactiva?.activa, 0, "viene marcada como inactiva")
+
+    ctx.eq((await PUT(`/api/categorias/${id}`, { activa: 1 })).status, 200, "reactivar")
+
+    await drop(`/api/categorias/${id}`)
+  },
+  { sev: "MEDIA", ref: "api.ts:getCategorias", nota: "el backend ya soportaba el filtro" },
+)
+
+test(
+  "K3",
+  "no se pueden renombrar ni borrar las categorias que escribe la app",
+  async ctx => {
+    const todas = await must(await GET("/api/categorias?incluirInactivas=1"), "GET categorias")
+
+    const sistema = todas.find(c => c.nombre === "Pago proveedor")
+
+    ctx.ok(sistema, "existe la categoria Pago proveedor")
+
+    if (!sistema) return
+
+    ctx.eq(
+      (await PUT(`/api/categorias/${sistema.id}`, { nombre: "Otra cosa" })).status,
+      409,
+      "renombrar Pago proveedor deberia dar 409",
+    )
+
+    ctx.eq((await DEL(`/api/categorias/${sistema.id}`)).status, 409, "borrar Pago proveedor deberia dar 409")
+
+    const despues = await must(
+      await GET("/api/categorias?incluirInactivas=1"),
+      "GET categorias",
+    )
+
+    ctx.ok(
+      despues.some(c => c.nombre === "Pago proveedor"),
+      "la categoria del sistema sigue intacta",
+    )
+  },
+  { sev: "MEDIA", ref: "categorias.controller.ts:CATEGORIAS_SISTEMA" },
+)
+
+test(
+  "K4",
+  "renombrar a un nombre existente no pisa la otra categoria",
+  async ctx => {
+    const nombreA = `Cat K4a ${uid()}`
+
+    const a = await mkCategoria("egreso", { nombre: nombreA })
+
+    const b = await mkCategoria("egreso")
+
+    ctx.eq(
+      (await PUT(`/api/categorias/${b.id}`, { nombre: nombreA })).status,
+      409,
+      "nombre duplicado deberia dar 409",
+    )
+
+    const todas = await must(
+      await GET("/api/categorias?incluirInactivas=1"),
+      "GET categorias",
+    )
+
+    ctx.eq(
+      todas.filter(c => c.nombre === nombreA).length,
+      1,
+      "no quedo duplicada",
+    )
+
+    await drop(`/api/categorias/${b.id}`)
+    await drop(`/api/categorias/${a.id}`)
+  },
+  { sev: "MEDIA", ref: "categorias.controller.ts:update" },
+)

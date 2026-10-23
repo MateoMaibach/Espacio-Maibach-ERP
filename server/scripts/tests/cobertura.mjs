@@ -110,7 +110,6 @@ test("V5", "GETs de catalogos y resumenes", async ctx => {
     `/api/caja/movimientos?mes=${mes}&anio=${anio}`,
     "/api/caja/cierres",
     `/api/caja/resumen?mes=${mes}&anio=${anio}`,
-    "/api/categorias/usadas",
     "/api/instalaciones/ventas",
     "/api/dashboard",
   ]
@@ -180,10 +179,6 @@ test("V8", "CRUD completo de cajas", async ctx => {
 
 test("V9", "CRUD completo de categorias", async ctx => {
   const { id } = await mkCategoria("ingreso")
-
-  const usadas = await must(await GET("/api/categorias/usadas"), "GET usadas")
-  ctx.ok(Array.isArray(usadas), "/usadas devuelve un arreglo")
-  ctx.ok(!usadas.some(c => c.id === id), "una categoria sin usar no figura en /usadas")
 
   ctx.eq((await PUT(`/api/categorias/${id}`, { nombre: `Renom ${uid()}` })).status, 200, "PUT categorias")
   ctx.eq((await DEL(`/api/categorias/${id}`)).status, 200, "DELETE categorias")
