@@ -15,6 +15,8 @@ import {
   type FicheroForm,
 } from "@/data/clienteDetalleData";
 
+import { calcularResumenCobros, calcularTotalesFichero } from "@/utils/fichero";
+
 import {
   getCliente,
   saveFichero,
@@ -411,56 +413,32 @@ export default function ClienteDetalle() {
 
   // Fichero calculated values
 
-  const itemsSubtotales = ficheroForm.items.map((item) => {
-    const cant = parseCurrencyInput(item.cant);
-
-    const precio = parseCurrencyInput(item.precioUnitario);
-
-    return cant * precio;
-  });
-
-  const importeTotal = itemsSubtotales.reduce((sum, sub) => sum + sub, 0);
-
-  const comisionDolar = importeTotal * (parseCurrencyInput(ficheroForm.comisionPct) / 100);
-
-  const costoPiscina = parseCurrencyInput(ficheroForm.costoPiscina);
-
-  const costoInst = parseCurrencyInput(ficheroForm.costoInstalacion);
-
-  const costoEquipo = parseCurrencyInput(ficheroForm.equipoFiltrado);
-
-  const costoManoObra = ficheroForm.manoObraVereda
-    ? parseCurrencyInput(ficheroForm.costoManoObra)
-    : 0;
-
-  const totalCostos = costoPiscina + costoInst + costoEquipo + costoManoObra + comisionDolar;
-
-  const margenNeto = importeTotal - totalCostos;
-
-  const margenPct = importeTotal > 0 ? (margenNeto / importeTotal) * 100 : 0;
+  const {
+    itemsSubtotales,
+    importeTotal,
+    comision: comisionDolar,
+    costoPiscina,
+    costoInstalacion: costoInst,
+    costoEquipo,
+    costoManoObra,
+    totalCostos,
+    margenNeto,
+    margenPct,
+  } = calcularTotalesFichero(ficheroForm);
 
   // Unified cobros computed values
 
-  const ficheroTotal = cliente?.fichero ? parseCurrencyInput(cliente.fichero.total) : 0;
-
-  const tienePagoInicial = (cliente?.fichero?.cuotas ?? []).some((c) => c.nro === 0);
-
-  const pagoInicialMonto = cliente?.fichero?.cuotas.find((c) => c.nro === 0)?.montoPlanificado ?? 0;
-
-  const totalCostoCobros =
-    cliente?.fichero?.cuotas
-      .filter((c) => c.nro > 0)
-      .reduce((sum, cu) => sum + cu.montoPlanificado, 0) ?? 0;
-
-  const totalIngresos = cliente?.fichero?.cuotas.reduce((sum, cu) => sum + cu.montoPagado, 0) ?? 0;
-
-  const saldoPendienteTotal = ficheroTotal - totalIngresos;
-
-  const saldoParaCuotas = ficheroTotal - pagoInicialMonto;
-
-  const porcentajePagado = ficheroTotal > 0 ? (totalIngresos / ficheroTotal) * 100 : 0;
-
-  const estaPagado = saldoPendienteTotal <= 0 && ficheroTotal > 0;
+  const {
+    ficheroTotal,
+    tienePagoInicial,
+    pagoInicialMonto,
+    totalCostoCobros,
+    totalIngresos,
+    saldoPendienteTotal,
+    saldoParaCuotas,
+    porcentajePagado,
+    estaPagado,
+  } = calcularResumenCobros(cliente?.fichero?.total, cliente?.fichero?.cuotas ?? []);
 
   function reloadCliente() {
     if (!id) return;
