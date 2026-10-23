@@ -451,7 +451,10 @@ const cajasCount = sqlite
   .get() as { count: number }
 
 if (cajasCount.count === 0) {
-  const now = Date.now()
+  // Drizzle declara created_at con mode "timestamp" (segundos). Guardar
+  // Date.now() (milisegundos) hacia que al leerlo se multiplicara por 1000:
+  // createdAt caia en el anio 58754.
+  const now = Math.floor(Date.now() / 1000)
 
   const insertCaja = sqlite.prepare(
     "INSERT INTO cajas (id, nombre, color, orden, activa, afecta_general, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -500,11 +503,20 @@ const CATEGORIAS_INICIALES: [string, string, string][] = [
     "INSERT OR IGNORE INTO categorias (id, nombre, tipo, activa, color, orden, created_at) VALUES (?, ?, ?, 1, ?, ?, ?)",
   )
 
-  const now = Date.now()
+  const now = Math.floor(Date.now() / 1000)
 
   CATEGORIAS_INICIALES.forEach(([nombre, tipo, color], i) => {
     insertCat.run(`cat_${nombre.toLowerCase().replace(/[^a-z0-9]+/g, "_")}`, nombre, tipo, color, i, now)
   })
+}
+
+{
+  // Repara las filas que sembraron versiones anteriores con milisegundos.
+  // 4_102_444_800 es el 2100-01-01 en segundos: cualquier valor mayor esta en ms.
+  sqlite.exec(`
+    UPDATE cajas SET created_at = created_at / 1000 WHERE created_at > 4102444800;
+    UPDATE categorias SET created_at = created_at / 1000 WHERE created_at > 4102444800;
+  `)
 }
 
 // Migration: add afecta_general column if missing
