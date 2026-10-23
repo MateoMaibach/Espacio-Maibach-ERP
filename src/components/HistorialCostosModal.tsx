@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { getHistorialCostos, type Articulo, type HistorialCosto } from "@/services/api";
+import { formatFecha } from "@/utils/fecha";
+import { formatMonto } from "@/utils/money";
 
 interface Props {
   articuloId: string;
@@ -11,16 +13,6 @@ const origenStyle: Record<string, { bg: string; color: string }> = {
   compra: { bg: "#d1fae5", color: "#10b981" },
   inicial: { bg: "#fef3c7", color: "#f59e0b" },
 };
-
-function formatMonto(valor: number) {
-  return `$${valor.toLocaleString("es-AR")}`;
-}
-
-function formatFecha(fecha: string) {
-  if (!fecha) return "—";
-  const [a, m, d] = fecha.split("-");
-  return `${d}/${m}/${a}`;
-}
 
 export default function HistorialCostosModal({ articuloId, onClose }: Props) {
   const [articulo, setArticulo] = useState<Articulo | null>(null);

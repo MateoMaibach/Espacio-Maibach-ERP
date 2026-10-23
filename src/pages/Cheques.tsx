@@ -6,6 +6,9 @@ import AppLayout from "@/layouts/AppLayout";
 
 import { IconSearch, IconPlus } from "@/components/Icons";
 
+import { formatFecha, toISODate } from "@/utils/fecha";
+import { formatMonto } from "@/utils/money";
+
 import ClienteSelector from "@/components/ClienteSelector";
 
 import {
@@ -42,26 +45,6 @@ const estadoStyle: Record<string, { bg: string; color: string }> = {
 
   Rechazado: { bg: "#fee2e2", color: "#ef4444" },
 };
-
-function formatCurrency(value: number): string {
-  return `$${value.toLocaleString("es-AR")}`;
-}
-
-function formatFecha(iso: string | null): string {
-  if (!iso) return "-";
-
-  const parts = iso.split("-");
-
-  if (parts.length < 3) return iso;
-
-  const [y, m, d] = [parts[0] || "", parts[1] || "", parts[2] || ""];
-
-  return `${d}/${m}/${y}`;
-}
-
-function toISODate(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
 
 interface ClienteOption {
   id: string;
@@ -661,7 +644,7 @@ export default function Cheques() {
                             {formatFecha(c.fechaPago)}
                           </td>
                           <td className="px-[20px] py-[16px] font-['Geist:SemiBold',sans-serif] font-semibold text-[#0f172a] text-[14px]">
-                            {formatCurrency(c.importe)}
+                            {formatMonto(c.importe)}
                           </td>
                         </>
                       ) : (
@@ -710,7 +693,7 @@ export default function Cheques() {
                             </div>
                           </td>
                           <td className="px-[20px] py-[16px] font-['Geist:SemiBold',sans-serif] font-semibold text-[#0f172a] text-[14px]">
-                            {formatCurrency(c.importe)}
+                            {formatMonto(c.importe)}
                           </td>
                         </>
                       )}
@@ -784,7 +767,7 @@ export default function Cheques() {
                 className="font-['Geist:Bold',sans-serif] font-bold text-[16px]"
                 style={{ color: s.color }}
               >
-                {formatCurrency(s.value)}
+                {formatMonto(s.value)}
               </p>
             </div>
           ))}

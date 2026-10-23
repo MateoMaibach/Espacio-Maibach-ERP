@@ -18,6 +18,8 @@ import {
   type MovimientoStock,
 } from "@/services/api";
 import DepositoFormModal from "@/components/DepositoFormModal";
+import { formatFecha } from "@/utils/fecha";
+import { formatMonto } from "@/utils/money";
 import ArticuloFormModal from "@/components/ArticuloFormModal";
 import HistorialCostosModal from "@/components/HistorialCostosModal";
 import MovimientoStockModal from "@/components/MovimientoStockModal";
@@ -51,16 +53,6 @@ const negativoStyle: Record<string, { bg: string; color: string }> = {
   alerta: { bg: "#fee2e2", color: "#ef4444" },
   ok: { bg: "#d1fae5", color: "#10b981" },
 };
-
-function formatMonto(valor: number) {
-  return `$${valor.toLocaleString("es-AR")}`;
-}
-
-function formatFecha(fecha: string) {
-  if (!fecha) return "—";
-  const [a, m, d] = fecha.split("-");
-  return `${d}/${m}/${a}`;
-}
 
 export default function Stock() {
   const navigate = useNavigate();

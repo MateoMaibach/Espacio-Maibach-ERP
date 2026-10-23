@@ -4,6 +4,7 @@ import AppLayout from "@/layouts/AppLayout";
 import { IconSearch, IconPlus } from "@/components/Icons";
 import { getProveedores, deleteProveedor, type Proveedor } from "@/services/api";
 import ProveedorFormModal from "@/components/ProveedorFormModal";
+import { formatMonto } from "@/utils/money";
 
 const estadoStyle: Record<string, { bg: string; color: string }> = {
   Activo: { bg: "#d1fae5", color: "#10b981" },
@@ -11,11 +12,6 @@ const estadoStyle: Record<string, { bg: string; color: string }> = {
   Suspendido: { bg: "#fee2e2", color: "#ef4444" },
   Pendiente: { bg: "#fef3c7", color: "#f59e0b" },
 };
-
-function formatMonto(value: number, moneda: string): string {
-  if (moneda === "ARS") return `$${value.toLocaleString("es-AR")}`;
-  return `${moneda} ${value.toLocaleString("es-AR")}`;
-}
 
 function formatearSaldos(proveedor: Proveedor): string {
   const claves = Object.keys(proveedor.saldos ?? {});

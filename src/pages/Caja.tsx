@@ -6,6 +6,9 @@ import AppLayout from "@/layouts/AppLayout";
 
 import { IconPlus, IconSearch } from "@/components/Icons";
 
+import { formatFechaLarga, toISODate } from "@/utils/fecha";
+import { formatMonto } from "@/utils/money";
+
 import {
   getMovimientos,
   createMovimiento,
@@ -52,41 +55,6 @@ const MESES = [
 ];
 
 const DONUT_COLORS = ["#0ea5e9", "#f59e0b", "#10b981", "#7c3aed", "#ef4444", "#ec4899"];
-
-function formatCurrency(value: number): string {
-  return `$${value.toLocaleString("es-AR")}`;
-}
-
-const SHORT_MONTHS = [
-  "Ene",
-  "Feb",
-  "Mar",
-  "Abr",
-  "May",
-  "Jun",
-  "Jul",
-  "Ago",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dic",
-];
-
-function formatFecha(iso: string): string {
-  if (!iso) return "";
-
-  const parts = iso.split("-");
-
-  if (parts.length < 3) return iso;
-
-  const [y, mo, d] = [parts[0] || "", parts[1] || "", parts[2] || ""];
-
-  return `${d} ${SHORT_MONTHS[parseInt(mo) - 1] || mo}, ${y}`;
-}
-
-function toISODate(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
 
 function getCurrentMonthYear() {
   const now = new Date();
@@ -241,7 +209,7 @@ function DonutChart({ data }: { data: { label: string; value: number; color: str
             className="font-['Geist:Bold']"
             style={{ fontSize: 16, fontWeight: 700, fill: "#0f172a" }}
           >
-            {formatCurrency(total)}
+            {formatMonto(total)}
           </text>
         </svg>
       </div>
@@ -1317,7 +1285,7 @@ export default function Caja() {
                     {key}
                   </p>
                   <p className="font-['Geist:Bold',sans-serif] font-bold text-[#0f172a] text-[22px] mt-[4px]">
-                    {formatCurrency(val.total)}
+                    {formatMonto(val.total)}
                   </p>
                 </div>
                 <div
@@ -1531,7 +1499,7 @@ export default function Caja() {
                           style={{ borderBottom: "1px solid #f1f5f9" }}
                         >
                           <td className="font-['Geist:Regular',sans-serif] text-[#475569] text-[13px] py-[12px]">
-                            {formatFecha(m.fecha)}
+                            {formatFechaLarga(m.fecha)}
                           </td>
                           <td className="font-['Geist:Medium',sans-serif] font-medium text-[#0f172a] text-[13px] py-[12px]">
                             <div className="flex flex-col">
@@ -1556,7 +1524,7 @@ export default function Caja() {
                           </td>
                           <td className="font-['Geist:SemiBold',sans-serif] font-semibold text-[#10b981] text-[13px] py-[12px]">
                             {m.tipo === "ingreso" ? (
-                              formatCurrency(m.monto)
+                              formatMonto(m.monto)
                             ) : (
                               <span className="text-[#94a3b8]">-</span>
                             )}
@@ -1566,7 +1534,7 @@ export default function Caja() {
                               m.tipo === "egreso" ? "text-[#ef4444]" : "text-[#94a3b8]"
                             }`}
                           >
-                            {m.tipo === "egreso" ? formatCurrency(m.monto) : "-"}
+                            {m.tipo === "egreso" ? formatMonto(m.monto) : "-"}
                           </td>
                           <td className="font-['Geist:Medium',sans-serif] font-medium text-[#0f172a] text-[13px] py-[12px]">
                             {m.moneda !== "ARS" && m.tipoCambio ? (
@@ -1703,7 +1671,7 @@ export default function Caja() {
                           className="font-['Geist:Bold',sans-serif] font-bold text-[14px]"
                           style={{ color: r.color }}
                         >
-                          {formatCurrency(r.value)}
+                          {formatMonto(r.value)}
                         </p>
                       </div>
                     ))}
@@ -1759,7 +1727,7 @@ export default function Caja() {
                           {c.subCaja}
                         </span>
                         <span className="font-['Geist:Regular',sans-serif] text-[#94a3b8] text-[11px]">
-                          {formatFecha(c.fecha || c.fechaCierre)}
+                          {formatFechaLarga(c.fecha || c.fechaCierre)}
                         </span>
                       </div>
                       <div className="flex items-center gap-[8px]">
@@ -1772,7 +1740,7 @@ export default function Caja() {
                         >
                           {c.diferencia === 0
                             ? "$0"
-                            : `${c.diferencia > 0 ? "+" : ""}${formatCurrency(c.diferencia)}`}
+                            : `${c.diferencia > 0 ? "+" : ""}${formatMonto(c.diferencia)}`}
                         </span>
                       </div>
                     </div>
@@ -2072,7 +2040,7 @@ export default function Caja() {
                           Saldo inicial (último cierre)
                         </span>
                         <span className="font-['Geist:Medium',sans-serif] font-medium text-[#0f172a] text-[13px]">
-                          {formatCurrency(saldoInicial)}
+                          {formatMonto(saldoInicial)}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
@@ -2080,7 +2048,7 @@ export default function Caja() {
                           Saldo final (ingresos - egresos)
                         </span>
                         <span className="font-['Geist:Medium',sans-serif] font-medium text-[#0f172a] text-[13px]">
-                          {formatCurrency(saldoFinal)}
+                          {formatMonto(saldoFinal)}
                         </span>
                       </div>
                       <div className="h-[1px] bg-[#e2e8f0]" />
@@ -2089,7 +2057,7 @@ export default function Caja() {
                           Saldo esperado
                         </span>
                         <span className="font-['Geist:SemiBold',sans-serif] font-semibold text-[#0f172a] text-[13px]">
-                          {formatCurrency(saldoEsperado)}
+                          {formatMonto(saldoEsperado)}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
@@ -2097,7 +2065,7 @@ export default function Caja() {
                           Saldo real
                         </span>
                         <span className="font-['Geist:SemiBold',sans-serif] font-semibold text-[#0f172a] text-[13px]">
-                          {formatCurrency(saldoReal)}
+                          {formatMonto(saldoReal)}
                         </span>
                       </div>
                       <div className="h-[1px] bg-[#e2e8f0]" />
@@ -2114,7 +2082,7 @@ export default function Caja() {
                             diff === 0 ? "text-[#10b981]" : "text-[#ef4444]"
                           }`}
                         >
-                          {diff === 0 ? "$0" : `${diff > 0 ? "+" : ""}${formatCurrency(diff)}`}
+                          {diff === 0 ? "$0" : `${diff > 0 ? "+" : ""}${formatMonto(diff)}`}
                         </span>
                       </div>
                     </div>

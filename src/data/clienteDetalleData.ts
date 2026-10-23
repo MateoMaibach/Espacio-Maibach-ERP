@@ -476,21 +476,14 @@ export const metodoColor: Record<string, string> = {
   Otro: "#64748b",
 };
 
-export function formatCurrency(value: number): string {
-  return (
-    "$" +
-    value.toLocaleString("es-AR", {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    })
-  );
-}
-
-export function parseCurrencyInput(value: string): number {
-  const cleaned = value.replace(/[^0-9]/g, "");
-
-  return parseInt(cleaned, 10) || 0;
-}
+/**
+ * Alias historicos. La implementacion vive en `utils/money.ts` para que el
+ * front y el server interpreten el mismo texto de la misma manera.
+ */
+export {
+  formatMonto as formatCurrency,
+  parseMonto as parseCurrencyInput,
+} from "@/utils/money";
 
 export function getCurrentDate(): string {
   const now = new Date();

@@ -7,6 +7,7 @@ import {
   type CompraInput,
   type CompraItem,
 } from "@/services/api";
+import { parseArray } from "@/utils/json";
 
 const ESTADOS: CompraEstado[] = ["Pendiente", "En Tránsito", "Recibido"];
 
@@ -37,13 +38,7 @@ function hoy(): string {
 }
 
 function parseItems(raw: Compra["items"]): CompraItem[] {
-  if (Array.isArray(raw)) return raw;
-  try {
-    const parsed = JSON.parse(String(raw));
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  return parseArray<CompraItem>(raw);
 }
 
 export default function CompraFormModal({ proveedorId, compra, monedas, onClose, onSaved }: Props) {

@@ -17,6 +17,9 @@ import ProveedorFormModal from "@/components/ProveedorFormModal";
 import CompraFormModal from "@/components/CompraFormModal";
 import OrdenPagoModal from "@/components/OrdenPagoModal";
 import RecepcionCompraModal from "@/components/RecepcionCompraModal";
+import { formatFecha } from "@/utils/fecha";
+import { parseArray } from "@/utils/json";
+import { formatMonto } from "@/utils/money";
 
 const estadoStyle: Record<string, { bg: string; color: string }> = {
   Activo: { bg: "#d1fae5", color: "#10b981" },
@@ -37,28 +40,10 @@ const ingresoEstadoStyle: Record<string, { bg: string; color: string }> = {
   Pendiente: { bg: "#f1f5f9", color: "#64748b" },
 };
 
-function formatMonto(value: number, moneda: string): string {
-  if (moneda === "ARS") return `$${value.toLocaleString("es-AR")}`;
-  return `${moneda} ${value.toLocaleString("es-AR")}`;
-}
-
-function formatFecha(iso: string): string {
-  if (!iso) return "—";
-  const [a, m, d] = iso.split("-");
-  if (!a || !m || !d) return iso;
-  return `${d}/${m}/${a}`;
-}
-
-function parseItems(
-  raw: Compra["items"],
-): { detalle?: string; cantidad?: number; precioUnitario?: number }[] {
-  if (Array.isArray(raw)) return raw;
-  try {
-    const parsed = JSON.parse(String(raw));
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+function parseItems(raw: Compra["items"]) {
+  return parseArray<{ detalle?: string; cantidad?: number; precioUnitario?: number }>(
+    raw,
+  );
 }
 
 export default function ProveedorDetalle() {

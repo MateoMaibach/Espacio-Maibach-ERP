@@ -10,6 +10,8 @@ import {
   type Compra,
   type OrdenPagoCompraLink,
 } from "@/services/api";
+import { parseArray } from "@/utils/json";
+import { formatMonto } from "@/utils/money";
 
 interface Linea {
   metodo: "caja" | "cheque";
@@ -43,18 +45,7 @@ function hoy(): string {
 }
 
 function parseItems(raw: Compra["items"]): { detalle: string }[] {
-  if (Array.isArray(raw)) return raw;
-  try {
-    const parsed = JSON.parse(String(raw));
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function formatMonto(value: number, moneda: string): string {
-  if (moneda === "ARS") return `$${value.toLocaleString("es-AR")}`;
-  return `${moneda} ${value.toLocaleString("es-AR")}`;
+  return parseArray<{ detalle: string }>(raw);
 }
 
 const lineaVacia = (subCaja: string, moneda: string): Linea => ({
